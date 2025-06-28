@@ -25,7 +25,7 @@ export function EditVariableModal({ variable, open, onOpenChange, onUpdate }: Ed
   useEffect(() => {
     if (variable) {
       setName(variable.name)
-      setValue(variable.value)
+      setValue(variable.value_json?.value || "")
     }
   }, [variable])
 
@@ -51,9 +51,7 @@ export function EditVariableModal({ variable, open, onOpenChange, onUpdate }: Ed
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>Edit Global Variable</DialogTitle>
-            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="h-6 w-6 p-0">
-              <X className="h-4 w-4" />
-            </Button>
+   
           </div>
         </DialogHeader>
 

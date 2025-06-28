@@ -1,88 +1,85 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import type { Sequence } from "@/types"
+import { useState, useEffect, useCallback } from "react"
+import type { Sequence } from "@/types" // Assuming types are defined
 import { apiClient } from "@/lib/api"
-import { toast } from "sonner"
-
+import { useToast } from "@/components/ui/use-toast" // For error notifications
+import { useAuth } from "./use-auth"
 
 export function useSequences() {
   const [sequences, setSequences] = useState<Sequence[]>([])
   const [loading, setLoading] = useState(true)
+  const {user} = useAuth()
   const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
 
-  const fetchSequences = async () => {
+  const fetchSequences = useCallback(async () => {
     try {
       setLoading(true)
-      // Mock API call
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const mockSequences: Sequence[] = [
-        { id: "1", name: "test", created_at: "2024-01-01", updated_at: "2024-01-01" },
-        { id: "2", name: "demo", created_at: "2024-01-01", updated_at: "2024-01-01" },
-        { id: "3", name: "Test1", created_at: "2024-01-01", updated_at: "2024-01-01" },
-        { id: "4", name: "sequence", created_at: "2024-01-01", updated_at: "2024-01-01" },
-        { id: "5", name: "Test April 17", created_at: "2024-01-01", updated_at: "2024-01-01" },
-        { id: "6", name: "SEQUENCE TEST", created_at: "2024-01-01", updated_at: "2024-01-01" },
-      ]
-
-      setSequences(mockSequences)
       setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch sequences")
+      const data = await apiClient.getSequences()
+      setSequences(data)
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch sequences")
+      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to fetch sequences" })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast, user])
+
+  const createSequence = async (data: { name: string; description?: string }) => {
+    try {
+      setLoading(true)
+      setError(null)
+      const newSequence = await apiClient.createSequence(data)
+      setSequences((prev) => [...prev, newSequence])
+      toast({ title: "Success", description: "Sequence created successfully." })
+      return newSequence
+    } catch (err: any) {
+      setError(err.message || "Failed to create sequence")
+      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to create sequence" })
+      throw err
     } finally {
       setLoading(false)
     }
   }
 
-  const createSequence = async (data: { name: string; description?: string }) => {
-    try {
-      const newSequence = await apiClient.createSequence(data)
-      setSequences((prev) => [...prev, newSequence])
-      return newSequence
-    } catch (err: any) {
-      toast.error("Failed to create sequence", { description: err.message })
-      throw err
-    }
-  }
-
   const updateSequence = async (id: string, data: { name?: string; description?: string }) => {
     try {
-      // Mock API call
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const updatedSequence = sequences.find((seq) => seq.id === id)
-      if (!updatedSequence) throw new Error("Sequence not found")
-
-      const updated = {
-        ...updatedSequence,
-        ...data,
-        updated_at: new Date().toISOString(),
-      }
-
+      setLoading(true)
+      setError(null)
+      const updated = await apiClient.updateSequence(id, data)
       setSequences((prev) => prev.map((seq) => (seq.id === id ? updated : seq)))
+      toast({ title: "Success", description: "Sequence updated successfully." })
       return updated
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update sequence")
+    } catch (err: any) {
+      setError(err.message || "Failed to update sequence")
+      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to update sequence" })
       throw err
+    } finally {
+      setLoading(false)
     }
   }
 
   const deleteSequence = async (id: string) => {
     try {
-      // Mock API call
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
+      setLoading(true)
+      setError(null)
+      await apiClient.deleteSequence(id)
       setSequences((prev) => prev.filter((seq) => seq.id !== id))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete sequence")
+      toast({ title: "Success", description: "Sequence deleted successfully." })
+    } catch (err: any) {
+      setError(err.message || "Failed to delete sequence")
+      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to delete sequence" })
       throw err
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchSequences()
-  }, [])
+  }, [fetchSequences])
 
   return {
     sequences,

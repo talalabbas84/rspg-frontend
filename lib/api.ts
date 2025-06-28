@@ -8,6 +8,7 @@ import type {
   CreateBlockData,
   UpdateBlockData,
   AvailableVariable,
+  BlockRun,
 } from "@/types"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1"
@@ -21,13 +22,9 @@ class ApiClient {
       "Content-Type": "application/json",
       ...options.headers,
     }
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`
-    }
+    if (token) headers["Authorization"] = `Bearer ${token}`
 
     const config: RequestInit = { ...options, headers }
-
     try {
       const response = await fetch(url, config)
       if (!response.ok) {
@@ -43,7 +40,7 @@ class ApiClient {
   }
 
   // --- Auth ---
-  async login(data: any) {
+  async login(data: { email: string; password: string }) {
     const formData = new URLSearchParams()
     formData.append("username", data.email)
     formData.append("password", data.password)
@@ -79,10 +76,10 @@ class ApiClient {
 
   // --- Blocks ---
   async getBlocksBySequence(sequenceId: string) {
-    return this.request<Block[]>(`/blocks/by_sequence/${sequenceId}`)
+    return this.request<Block[]>(`/blocks/in_sequence/${sequenceId}`)
   }
   async createBlock(data: CreateBlockData) {
-    return this.request<Block>("/blocks/", { method: "POST", body: JSON.stringify(data) })
+    return this.request<Block>(`/blocks/in_sequence/${data.sequence_id}`, { method: "POST", body: JSON.stringify(data) })
   }
   async updateBlock(id: string, data: UpdateBlockData) {
     return this.request<Block>(`/blocks/${id}`, { method: "PUT", body: JSON.stringify(data) })
@@ -93,16 +90,32 @@ class ApiClient {
 
   // --- Variables ---
   async getVariablesBySequence(sequenceId: string) {
-    return this.request<Variable[]>(`/variables/by_sequence/${sequenceId}`)
+    return this.request<Variable[]>(`/variables/in_sequence/${sequenceId}`)
   }
   async createVariable(data: any) {
     return this.request<Variable>("/variables/", { method: "POST", body: JSON.stringify(data) })
   }
-  async deleteVariable(id: string) {
+  async deleteVariable(id: number) {
     return this.request<null>(`/variables/${id}`, { method: "DELETE" })
   }
   async getAvailableVariablesForSequence(sequenceId: string) {
     return this.request<AvailableVariable[]>(`/variables/available_for_sequence/${sequenceId}`)
+  }
+  async updateVariable(id: number, data: any) {
+    return this.request<Variable>(`/variables/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  }
+  // --- Global Variables ---
+  async createGlobalVariable(data: any) {
+    return this.request<Variable>("/variables/user_global/", { method: "POST", body: JSON.stringify(data) })
+  }
+  async updateGlobalVariable(id: number, data: any) {
+    return this.request<Variable>(`/variables/user_global/${id}`, { method: "PUT", body: JSON.stringify(data) })
+  }
+  async deleteGlobalVariable(id: number) {
+    return this.request<null>(`/variables/user_global/${id}`, { method: "DELETE" })
+  }
+  async getGlobalVariables() {
+    return this.request<Variable[]>("/variables/user_global/")
   }
 
   // --- Global Lists ---
@@ -112,29 +125,92 @@ class ApiClient {
   async createGlobalList(data: any) {
     return this.request<GlobalList>("/global-lists/", { method: "POST", body: JSON.stringify(data) })
   }
-  async updateGlobalList(id: string, data: any) {
+  async updateGlobalList(id: number, data: any) {
     return this.request<GlobalList>(`/global-lists/${id}`, { method: "PUT", body: JSON.stringify(data) })
   }
-  async deleteGlobalList(id: string) {
+  async deleteGlobalList(id: number) {
     return this.request<null>(`/global-lists/${id}`, { method: "DELETE" })
   }
 
-  // --- Runs ---
+  // --- Runs (Sequence Runs) ---
   async createRunForSequence(data: any) {
     return this.request<Run>("/runs/", { method: "POST", body: JSON.stringify(data) })
   }
   async getRunsBySequence(sequenceId: string) {
-    return this.request<Run[]>(`/runs/by_sequence/${sequenceId}`)
+    return this.request<Run[]>(`/runs/for_sequence/${sequenceId}`)
   }
   async getRunDetails(runId: string) {
-    return this.request<any>(`/runs/${runId}`) // Define a detailed Run type if needed
+    return this.request<Run>(`/runs/${runId}`)
   }
-  async previewPrompt(sequenceId: string, blockId: string, inputOverrides?: any) {
-    return this.request<{ rendered_prompt: string }>("/engine/preview_prompt", {
+
+  // --- Single Block Execution ---
+  async runSingleBlock(blockId: string, inputOverrides: Record<string, any> = {}) {
+    return this.request<BlockRun>(`/blocks/${blockId}/run`, {
       method: "POST",
-      body: JSON.stringify({ sequence_id: sequenceId, block_id: blockId, input_overrides: inputOverrides || {} }),
+      body: JSON.stringify(inputOverrides),
+    })
+  }
+
+
+  // --- Manual Edit Block Output ---
+  async editBlockRunOutput(runId: string, blockRunId: string, newOutput: Record<string, any>) {
+    return this.request<BlockRun>(`/runs/${runId}/block/${blockRunId}/edit_output`, {
+      method: "POST",
+      body: JSON.stringify(newOutput),
+    })
+  }
+
+  // --- Prompt Preview ---
+  async previewBlockPrompt(blockId: string, inputOverrides: Record<string, any> = {}) {
+    return this.request<{ rendered_prompt: string }>(`/blocks/${blockId}/preview`, {
+      method: "POST",
+      body: JSON.stringify(inputOverrides),
+    })
+  }
+
+  async runSequence(sequenceId: string, inputOverrides: Record<string, any> = {}) {
+  return this.request<Run>("/runs/", {
+    method: "POST",
+    body: JSON.stringify({
+      sequence_id: sequenceId,
+      input_overrides_json: inputOverrides || {},
+    }),
+  })
+}
+
+  // Run a single block
+  async runBlock(blockId: string, inputOverrides: Record<string, any> = {}) {
+    return this.request<BlockRun>(`/blocks/${blockId}/run`, {
+      method: "POST",
+      body: JSON.stringify(inputOverrides),
+    })
+  }
+
+  // Rerun from a block (downstream)
+  async rerunFromBlock(runId: string, blockId: string, inputOverrides: Record<string, any> = {}) {
+    return this.request<Run>(`/runs/${runId}/rerun_from_block/${blockId}`, {
+      method: "POST",
+      body: JSON.stringify(inputOverrides),
+    })
+  }
+
+  // Edit output for a block in a run
+  async editBlockOutput(runId: string, blockRunId: string, newOutput: Record<string, any>) {
+    return this.request<BlockRun>(`/runs/${runId}/block/${blockRunId}/edit_output`, {
+      method: "POST",
+      body: JSON.stringify(newOutput),
+    })
+  }
+
+  // Prompt preview for a block
+  async previewPrompt(blockId: string, inputOverrides: Record<string, any> = {}) {
+    return this.request<{ rendered_prompt: string }>(`/blocks/${blockId}/preview`, {
+      method: "POST",
+      body: JSON.stringify(inputOverrides),
     })
   }
 }
+
+
 
 export const apiClient = new ApiClient()

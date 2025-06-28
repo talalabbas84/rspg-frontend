@@ -36,7 +36,7 @@ async def create_block(
     return created_block
 
 
-@router.get("/by_sequence/{sequence_id}", response_model=List[block_schema.BlockRead])
+@router.get("/in_sequence/{sequence_id}", response_model=List[block_schema.BlockRead])
 async def read_blocks_for_sequence(
     parent_sequence: models.Sequence = Depends(get_parent_sequence_for_block), # Validates sequence ownership
     db: AsyncSession = Depends(get_db),

@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -9,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { X } from "lucide-react"
+import { useGlobalVariables } from "@/hooks/use-global-variables"
 
 interface CreateVariableModalProps {
   open: boolean
@@ -18,27 +17,21 @@ interface CreateVariableModalProps {
 export function CreateVariableModal({ open, onOpenChange }: CreateVariableModalProps) {
   const [name, setName] = useState("")
   const [value, setValue] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [description, setDescription] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const { createVariable, loading } = useGlobalVariables()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-
+    setError(null)
     try {
-      // Mock API call - replace with actual implementation
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      console.log("Creating variable:", { name, value })
-
+      await createVariable({ name, value, description })
       onOpenChange(false)
       setName("")
       setValue("")
-
-      // Show success message
-      alert("Variable created successfully!")
-    } catch (error) {
-      alert("Failed to create variable")
-    } finally {
-      setLoading(false)
+      setDescription("")
+    } catch (err: any) {
+      setError(err?.message || "Failed to create variable")
     }
   }
 
@@ -48,12 +41,8 @@ export function CreateVariableModal({ open, onOpenChange }: CreateVariableModalP
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>Create New Global Variable</DialogTitle>
-            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="h-6 w-6 p-0">
-              <X className="h-4 w-4" />
-            </Button>
           </div>
         </DialogHeader>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="variable-name">Variable Name</Label>
@@ -63,9 +52,9 @@ export function CreateVariableModal({ open, onOpenChange }: CreateVariableModalP
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
+              autoFocus
             />
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="variable-value">Variable Value</Label>
             <Textarea
@@ -74,10 +63,20 @@ export function CreateVariableModal({ open, onOpenChange }: CreateVariableModalP
               value={value}
               onChange={(e) => setValue(e.target.value)}
               required
-              className="min-h-[100px]"
+              className="min-h-[80px]"
             />
           </div>
-
+          <div className="space-y-2">
+            <Label htmlFor="variable-description">Description (optional)</Label>
+            <Textarea
+              id="variable-description"
+              placeholder="Describe this variable (optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="min-h-[50px]"
+            />
+          </div>
+          {error && <div className="text-sm text-red-500">{error}</div>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

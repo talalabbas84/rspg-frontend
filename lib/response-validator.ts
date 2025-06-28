@@ -63,7 +63,7 @@ async function validateBasicContent(
   }
 
   // Check minimum length
-  const minLength = options.minLength || 10
+  const minLength = options.minLength || 1
   if (content.trim().length < minLength) {
     result.errors.push(`Content must be at least ${minLength} characters long`)
   }

@@ -14,7 +14,7 @@ export function useBlocks(sequenceId: string) {
 
     try {
       setLoading(true)
-      const data = await apiClient.getBlocks(sequenceId)
+      const data = await apiClient.getBlocksBySequence(sequenceId)
       setBlocks(data)
       setError(null)
     } catch (err) {
@@ -26,6 +26,7 @@ export function useBlocks(sequenceId: string) {
 
   const createBlock = async (data: any) => {
     try {
+      console.log("Creating block with data:", data)
       const newBlock = await apiClient.createBlock({ ...data, sequence_id: sequenceId })
       setBlocks((prev) => [...prev, newBlock])
       return newBlock

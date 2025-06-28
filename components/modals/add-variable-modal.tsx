@@ -1,61 +1,44 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { X, Search } from "lucide-react"
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { X, Search } from "lucide-react";
+import { useAvailableVariables } from "@/hooks/use-available-variables";
 
 interface AddVariableModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSelectVariable: (variable: string) => void
-}
-
-interface AvailableVariable {
-  name: string
-  type: "global" | "list" | "output"
-  value?: string
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelectVariable: (variable: string) => void;
 }
 
 export function AddVariableModal({ open, onOpenChange, onSelectVariable }: AddVariableModalProps) {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [variables, setVariables] = useState<AvailableVariable[]>([])
-
-  useEffect(() => {
-    // Mock available variables - replace with actual API call
-    setVariables([
-      { name: "global", type: "global", value: "Make 5 claims for a biometric water bottle..." },
-      { name: "OP1", type: "output", value: "Output from Block 1" },
-      { name: "OP2", type: "output", value: "Output from Block 2" },
-      { name: "NewGlobalList", type: "list", value: "List of items" },
-      { name: "items222", type: "list", value: "Another list" },
-      { name: "paragraph_check", type: "list", value: "Paragraph checking list" },
-    ])
-  }, [])
+  const [searchTerm, setSearchTerm] = useState("");
+  const { variables, loading } = useAvailableVariables();
 
   const filteredVariables = variables.filter((variable) =>
-    variable.name.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+    variable.label.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const handleSelectVariable = (variableName: string) => {
-    onSelectVariable(variableName)
-    onOpenChange(false)
-    setSearchTerm("")
-  }
+  const handleSelectVariable = (variableValue: string) => {
+    onSelectVariable(variableValue);
+    onOpenChange(false);
+    setSearchTerm("");
+  };
 
   const getVariableTypeColor = (type: string) => {
     switch (type) {
       case "global":
-        return "bg-blue-100 text-blue-800"
+        return "bg-blue-100 text-blue-800";
       case "list":
-        return "bg-green-100 text-green-800"
+        return "bg-green-100 text-green-800";
       case "output":
-        return "bg-purple-100 text-purple-800"
+        return "bg-purple-100 text-purple-800";
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800";
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,38 +65,42 @@ export function AddVariableModal({ open, onOpenChange, onSelectVariable }: AddVa
           </div>
 
           {/* Variables List */}
-          <div className="max-h-60 overflow-y-auto space-y-2">
-            {filteredVariables.map((variable) => (
-              <div
-                key={variable.name}
-                className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleSelectVariable(variable.name)}
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900">{variable.name}</span>
-                    <span className={`text-xs px-2 py-1 rounded ${getVariableTypeColor(variable.type)}`}>
-                      {variable.type}
-                    </span>
-                  </div>
-                  {variable.value && (
-                    <div className="text-sm text-gray-500 truncate mt-1" title={variable.value}>
-                      {variable.value}
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">Loading...</div>
+          ) : (
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {filteredVariables.map((variable) => (
+                <div
+                  key={variable.value}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                  onClick={() => handleSelectVariable(variable.value)}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900">{variable.label}</span>
+                      <span className={`text-xs px-2 py-1 rounded ${getVariableTypeColor(variable.type)}`}>
+                        {variable.type}
+                      </span>
                     </div>
-                  )}
+                    {variable.description && (
+                      <div className="text-sm text-gray-500 truncate mt-1" title={variable.description}>
+                        {variable.description}
+                      </div>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
+                    Add
+                  </Button>
                 </div>
-                <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
-                  Add
-                </Button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
-          {filteredVariables.length === 0 && (
+          {!loading && filteredVariables.length === 0 && (
             <div className="text-center py-8 text-gray-500">No variables found matching "{searchTerm}"</div>
           )}
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

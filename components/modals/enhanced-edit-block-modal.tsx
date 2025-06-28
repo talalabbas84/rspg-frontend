@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,48 +19,74 @@ import {
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { X, Plus, Trash2 } from "lucide-react";
-import type { BlockType, MultiListConfigItem } from "@/types";
+import type { Block, BlockType, MultiListConfigItem } from "@/types";
 import { EnhancedAutocompleteTextarea } from "@/components/ui/enhanced-autocomplete-textarea";
 import { useAvailableVariables } from "@/hooks/use-available-variables";
 
-interface EnhancedCreateBlockModalProps {
+interface EditBlockModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  blockType: BlockType;
-  sequenceId: string;
-  onCreate: (data: any) => void;
+  block: Block | null;
+  onUpdate: (payload: any) => void;
 }
 
-export function EnhancedCreateBlockModal({
+export function EditBlockModal({
   open,
   onOpenChange,
-  blockType,
-  sequenceId,
-  onCreate,
-}: EnhancedCreateBlockModalProps) {
-  // Form state
+  block,
+  onUpdate,
+}: EditBlockModalProps) {
+  // ---- Initial state from block ----
   const [name, setName] = useState("");
   const [model, setModel] = useState("claude-3-5-sonnet-latest");
   const [prompt, setPrompt] = useState("");
   const [outputName, setOutputName] = useState("");
-
-  // Discretization fields
+  // Discretization
   const [outputVariableNames, setOutputVariableNames] = useState<string[]>([
     "",
   ]);
-
-  // Single List fields
+  // Single List
   const [inputListName, setInputListName] = useState("");
-
-  // Multi List fields
+  // Multi List
   const [multiListConfigs, setMultiListConfigs] = useState<
     MultiListConfigItem[]
   >([{ id: "1", name: "", priority: 1 }]);
+  // Block Type (could also be passed in as a prop if you want to force lock it)
+  const blockType: BlockType = block?.type || "standard";
 
-  const { variables } = useAvailableVariables(sequenceId);
+  const { variables } = useAvailableVariables(block?.sequence_id);
 
-  // Dynamic handlers
-  // --- Output variable names (discretization) ---
+  // ---- Populate state when block changes ----
+  useEffect(() => {
+    if (!block) return;
+    setName(block.name || "");
+    setModel(block.llm_model_override || "claude-3-5-sonnet-latest");
+
+    // Pull config from block.config_json, handling all types
+    if (block.type === "standard" && block.config_json) {
+      setPrompt(block.config_json.prompt ?? "");
+      setOutputName(block.config_json.output_variable_name ?? "");
+    } else if (block.type === "discretization" && block.config_json) {
+      setPrompt(block.config_json.prompt ?? "");
+      setOutputVariableNames(block.config_json.output_names ?? [""]);
+      setOutputName(""); // clear, not used for this type
+    } else if (block.type === "single_list" && block.config_json) {
+      setPrompt(block.config_json.prompt ?? "");
+      setInputListName(block.config_json.input_list_variable_name ?? "");
+      setOutputName(block.config_json.output_list_variable_name ?? "");
+    } else if (block.type === "multi_list" && block.config_json) {
+      setPrompt(block.config_json.prompt ?? "");
+      setMultiListConfigs(
+        (block.config_json.input_lists_config ?? []).map(
+          (item: any, idx: number) => ({ id: idx.toString(), ...item })
+        )
+      );
+      setOutputName(block.config_json.output_matrix_variable_name ?? "");
+    }
+    // eslint-disable-next-line
+  }, [block, open]);
+
+  // --- Discretization output vars handlers ---
   const addOutputVariable = () =>
     setOutputVariableNames((prev) => [...prev, ""]);
   const updateOutputVariable = (index: number, value: string) =>
@@ -70,7 +96,7 @@ export function EnhancedCreateBlockModal({
   const removeOutputVariable = (index: number) =>
     setOutputVariableNames((prev) => prev.filter((_, i) => i !== index));
 
-  // --- Multi-list configs ---
+  // --- Multi-list configs handlers ---
   const addMultiListConfig = () => {
     setMultiListConfigs((prev) => [
       ...prev,
@@ -116,34 +142,23 @@ export function EnhancedCreateBlockModal({
         output_matrix_variable_name: outputName,
       };
     } else {
-      return {}; // fallback (should never happen)
+      return {}; // fallback
     }
   }
 
   // --- Submit handler ---
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!block) return;
 
     const payload = {
+      ...block,
       name,
-      type: blockType,
-      model,
-      sequence_id: Number(sequenceId),
+      llm_model_override: model,
       config_json: buildConfigJson(),
-      order: 0, // backend can auto-handle order, or adjust here if needed
     };
-
-    onCreate(payload);
+    onUpdate(payload);
     onOpenChange(false);
-
-    // Reset state
-    setName("");
-    setModel("claude-3-5-sonnet-latest");
-    setPrompt("");
-    setOutputName("");
-    setOutputVariableNames([""]);
-    setInputListName("");
-    setMultiListConfigs([{ id: "1", name: "", priority: 1 }]);
   }
 
   // --- UI helpers ---
@@ -161,8 +176,9 @@ export function EnhancedCreateBlockModal({
         return "";
     }
   };
-  const listOptions = variables.filter(v => v.type === "list");
+  const listOptions = variables.filter((v) => v.type === "list");
 
+  if (!block) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -171,19 +187,13 @@ export function EnhancedCreateBlockModal({
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle>
-                Creates {blockType.replace("_", " ")} Block
+                Edit {blockType.replace("_", " ")} Block
               </DialogTitle>
               <p className="text-sm text-gray-600 mt-1">
                 {getBlockTypeDescription()}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+      
           </div>
         </DialogHeader>
 
@@ -197,7 +207,6 @@ export function EnhancedCreateBlockModal({
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter block name"
                   required
                 />
               </div>
@@ -261,6 +270,7 @@ export function EnhancedCreateBlockModal({
               </div>
             </Card>
           )}
+
           {blockType === "single_list" && (
             <Card className="p-4">
               <h3 className="font-medium mb-4">Single List Configuration</h3>
@@ -281,6 +291,7 @@ export function EnhancedCreateBlockModal({
                   )}
                 </SelectContent>
               </Select>
+
               <p className="text-xs text-gray-600 mt-1">
                 The prompt will be applied to each item in this list.
               </p>
@@ -359,7 +370,6 @@ export function EnhancedCreateBlockModal({
               </Button>
             </Card>
           )}
-
           {/* Prompt & Output */}
           <Card className="p-4">
             <h3 className="font-medium mb-4">Prompt Configuration</h3>
@@ -374,15 +384,18 @@ export function EnhancedCreateBlockModal({
                   rows={6}
                 />
               </div>
-              <div>
-                <Label>Output Name</Label>
-                <Input
-                  value={outputName}
-                  onChange={(e) => setOutputName(e.target.value)}
-                  placeholder="e.g., processed_claims"
-                  required
-                />
-              </div>
+              {/* Output name not needed for discretization */}
+              {blockType !== "discretization" && (
+                <div>
+                  <Label>Output Name</Label>
+                  <Input
+                    value={outputName}
+                    onChange={(e) => setOutputName(e.target.value)}
+                    placeholder="e.g., processed_claims"
+                    required
+                  />
+                </div>
+              )}
             </div>
           </Card>
 
@@ -395,7 +408,7 @@ export function EnhancedCreateBlockModal({
             >
               Cancel
             </Button>
-            <Button type="submit">Create Block</Button>
+            <Button type="submit">Update Block</Button>
           </div>
         </form>
       </DialogContent>

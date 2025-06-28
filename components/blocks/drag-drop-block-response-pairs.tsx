@@ -1,71 +1,161 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import type { Block } from "@/types"
-import { DragDropBlockResponsePair } from "./drag-drop-block-response-pair"
+import { useEffect, useState } from "react";
+import type { Block } from "@/types";
+import { DragDropBlockResponsePair } from "./drag-drop-block-response-pair";
+import { useBlocks } from "@/hooks/use-blocks";
+import { useRunActions } from "@/hooks/use-run-actions";
+import { apiClient } from "@/lib/api";
 
 interface DragDropBlockResponsePairsProps {
-  sequenceId: string
-  onEditBlock?: (block: Block) => void
+  sequenceId: string;
+  onEditBlock?: (block: Block) => void;
 }
 
-export function DragDropBlockResponsePairs({ sequenceId, onEditBlock }: DragDropBlockResponsePairsProps) {
-  const [blocks, setBlocks] = useState<Block[]>([])
+export function DragDropBlockResponsePairs({
+  sequenceId,
+  onEditBlock,
+}: DragDropBlockResponsePairsProps) {
+  const { blocks } = useBlocks(sequenceId);
+  const { runSequence, loading, getRunsForSequence, rerunFromBlock } =
+    useRunActions();
+
+  const [isRunning, setIsRunning] = useState(false);
+  const [sequenceRunResult, setSequenceRunResult] = useState<any>(null);
+  const [inputOverrides, setInputOverrides] = useState<{ [k: string]: string }>(
+    {}
+  );
 
   useEffect(() => {
-    // Mock data - replace with actual API call
-    setBlocks([
-      {
-        id: "1",
-        sequence_id: sequenceId,
-        name: "Block 1",
-        block_type: "standard",
-        order: 1,
-        model: "claude-3-5-haiku-latest",
-        prompt:
-          "Make 5 claims for a biometric water bottle. 1 independent and 4 dependent. Use the global context: <<global>> and reference the user input: <<user_input>>",
-        output_name: "OP1",
-        config: {},
-        created_at: "2024-01-01",
-        updated_at: "2024-01-01",
-      },
-      {
-        id: "2",
-        sequence_id: sequenceId,
-        name: "Block 2",
-        block_type: "discretization",
-        order: 2,
-        model: "claude-3-5-sonnet-latest",
-        prompt: 'Please format claims {\n<<OP1>>\n} into a JSONelement {\nClaim_1: "...",\nClaim_2: "..."}',
-        output_name: "OP2",
-        config: {
-          number_of_outputs: 5,
-        },
-        created_at: "2024-01-01",
-        updated_at: "2024-01-01",
-      },
-    ])
-  }, [sequenceId])
+    async function fetchLatestRun() {
+      try {
+        const runs = await getRunsForSequence(sequenceId);
+        if (runs && runs.length > 0) {
+          // You may want to pick the latest COMPLETED run, not just the first.
+          // Assuming runs are sorted newest-to-oldest, or sort manually:
+          const latestRun = runs
+            .filter((r) => r.status === "completed")
+            .sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
+            )[0];
+          if (latestRun) {
+            // Fetch full details including block_runs:
+            const details = await apiClient.getRunDetails(String(latestRun.id));
+            setSequenceRunResult(details);
+          }
+        } else {
+          setSequenceRunResult(null); // No runs yet
+        }
+      } catch (e) {
+        setSequenceRunResult(null); // handle error, optionally show toast
+      }
+    }
+    fetchLatestRun();
+  }, [sequenceId, getRunsForSequence]);
 
-  const handleDeleteBlock = (blockId: string) => {
-    setBlocks(blocks.filter((block) => block.id !== blockId))
+  // Global: Run sequence and save results
+  async function handleRunFullSequence() {
+    setIsRunning(true);
+    try {
+      const run = await runSequence(sequenceId, inputOverrides);
+      setSequenceRunResult(run);
+    } finally {
+      setIsRunning(false);
+    }
   }
 
-  const handleUpdateBlock = (updatedBlock: Block) => {
-    setBlocks(blocks.map((block) => (block.id === updatedBlock.id ? updatedBlock : block)))
+  async function handleRerunFromBlock(blockId: string) {
+    if (!sequenceRunResult?.id) return;
+    setIsRunning(true);
+    try {
+      // inputOverrides: send only overrides for relevant variables if you want
+      const newRun = await rerunFromBlock(
+        String(sequenceRunResult.id),
+        String(blockId),
+        inputOverrides
+      );
+      setSequenceRunResult(newRun);
+    } finally {
+      setIsRunning(false);
+    }
   }
 
+  // Allow block components to update shared inputOverrides
+  function handleInputOverrideChange(varName: string, value: string) {
+    setInputOverrides((prev) => ({ ...prev, [varName]: value }));
+  }
+
+  // For a given block, return its run output (if any)
+  function getBlockRunResponse(block: Block) {
+    if (!sequenceRunResult?.block_runs) return null;
+    const blockRun = sequenceRunResult.block_runs.find(
+      (br: any) => br.block_id === block.id
+    );
+    if (!blockRun) return null;
+    return {
+      id: `response-${block.id}`,
+      blockRunId: blockRun.id,
+      blockId: String(block.id),
+      content: blockRun.llm_output_text || "No output",
+      outputs: blockRun.named_outputs_json,
+      matrix_output: blockRun.matrix_outputs_json,
+      editedAt: blockRun.completed_at,
+    };
+  }
+
+  async function refetchLatestRun() {
+    try {
+      const details = await apiClient.getRunDetails(
+        String(sequenceRunResult.id)
+      );
+      setSequenceRunResult(details);
+    } catch (e) {
+      // handle error if needed
+    }
+  }
+  if (!blocks || blocks.length === 0) {
+    return (
+      <div className="p-4 text-gray-500 bg-gray-50 border-dashed border-2 border-gray-200 text-center">
+        No blocks found in this sequence.
+      </div>
+    );
+  }
+
+
+  console.log(
+    "Rendering DragDropBlockResponsePairs",
+    blocks.length,
+    sequenceRunResult?.id
+  );
   return (
     <div className="space-y-8">
+      {/* Global "Run Sequence" */}
+      <div className="flex gap-4 mb-4">
+        <button
+          onClick={handleRunFullSequence}
+          disabled={isRunning || loading}
+          className="bg-green-600 text-white rounded px-4 py-2 shadow"
+        >
+          {isRunning || loading ? "Running..." : "Run Full Sequence"}
+        </button>
+      </div>
       {blocks.map((block) => (
         <DragDropBlockResponsePair
           key={block.id}
           block={block}
           onEdit={onEditBlock}
-          onDelete={handleDeleteBlock}
-          onUpdateBlock={handleUpdateBlock}
+          refetchRun={refetchLatestRun}
+          onInputOverrideChange={handleInputOverrideChange}
+          inputOverrides={inputOverrides}
+          onRerunFromBlock={handleRerunFromBlock}
+          response={{
+            ...getBlockRunResponse(block),
+            runId: sequenceRunResult?.id, // add runId so child can use it
+          }}
         />
       ))}
     </div>
-  )
+  );
 }

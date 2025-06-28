@@ -66,7 +66,7 @@ async def create_run_for_sequence(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to execute sequence: {e}")
 
 
-@router.get("/by_sequence/{sequence_id}", response_model=List[run_schema.RunRead])
+@router.get("/in_sequence/{sequence_id}", response_model=List[run_schema.RunRead])
 async def read_runs_for_sequence(
     sequence_id: int,
     db: AsyncSession = Depends(get_db),

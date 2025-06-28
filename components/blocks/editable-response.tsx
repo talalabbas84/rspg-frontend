@@ -1,363 +1,291 @@
-"use client"
-
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Edit3, Save, X, Check, AlertTriangle, CheckCircle } from "lucide-react"
-import { validateResponse, type ValidationResult } from "@/lib/response-validator"
+"use client";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Edit3, Save, X, Check, AlertTriangle, CheckCircle } from "lucide-react";
+import { validateResponse, type ValidationResult } from "@/lib/response-validator";
 
 interface BlockResponse {
-  id: string
-  blockId: string
-  content: string
-  outputs?: { [key: string]: string }
-  editedAt?: string
+  id: string;
+  blockId: string;
+  content: string;
+  outputs?: { [key: string]: string };
+  list_output?: any;
+  matrix_output?: any;
+  editedAt?: string;
 }
 
 interface EditableResponseProps {
-  response: BlockResponse | null
-  blockType: string
-  onUpdate: (response: BlockResponse) => void
+  response: BlockResponse | null;
+  blockType: string;
+  onUpdate: (response: BlockResponse) => void;
 }
 
-export function EditableResponse({ response, blockType, onUpdate }: EditableResponseProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editingField, setEditingField] = useState<string | null>(null)
-  const [editedContent, setEditedContent] = useState("")
-  const [editedOutputs, setEditedOutputs] = useState<{ [key: string]: string }>({})
-  const [validation, setValidation] = useState<ValidationResult | null>(null)
-  const [isValidating, setIsValidating] = useState(false)
+// Utility: shallow copy to avoid undefined/nulls
+function safeCopy<T>(val: T | undefined | null, def: T): T {
+  return val ? JSON.parse(JSON.stringify(val)) : def;
+}
 
-  if (!response) {
-    return (
-      <div className="space-y-4">
-        <div>
-          <h4 className="text-base font-medium text-gray-900 mb-2">Response:</h4>
-          <div className="text-sm text-gray-500">No response yet. Run the block to see results.</div>
-        </div>
-      </div>
-    )
-  }
+export function EditableResponse({
+  response,
+  blockType,
+  onUpdate,
+}: EditableResponseProps) {
+  // --- State for each output type ---
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editedContent, setEditedContent] = useState("");
+  const [editedOutputs, setEditedOutputs] = useState<{ [key: string]: string }>({});
+  const [editedList, setEditedList] = useState<any[]>(safeCopy(response?.list_output, []));
+  const [editedMatrix, setEditedMatrix] = useState<any>(safeCopy(response?.matrix_output, {}));
 
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+
+  // ---- Enter Edit Mode ----
   const handleStartEdit = (field?: string) => {
-    setValidation(null) // Clear previous validation
-    if (field) {
-      setEditingField(field)
-      setEditedOutputs({ ...response.outputs })
+    setValidation(null);
+    setEditingField(field ?? null);
+    if (blockType === "discretization") {
+      setEditedOutputs({ ...response?.outputs }); // Defensive copy
+    } else if (blockType === "single_list" || blockType === "multi_list") {
+      setEditedList(safeCopy(response?.list_output, []));
+    } else if (blockType === "matrix") {
+      setEditedMatrix(safeCopy(response?.matrix_output, {}));
     } else {
-      setIsEditing(true)
-      setEditedContent(response.content)
+      setEditedContent(response?.content ?? "");
     }
-  }
+    setIsEditing(true);
+  };
 
+  // ---- Save Logic ----
   const handleValidateAndSave = async (field?: string) => {
-    setIsValidating(true)
-
+    setIsValidating(true);
     try {
-      let validationResult: ValidationResult
-
-      if (field && response.outputs) {
-        // Validate specific output field
-        validationResult = await validateResponse(editedOutputs[field] || "", blockType, {
-          fieldName: field,
-          isOutput: true,
-        })
+      let validationResult;
+      if (blockType === "discretization" && field && response?.outputs) {
+        validationResult = await validateResponse(
+          editedOutputs[field] || "",
+          blockType,
+          { fieldName: field, isOutput: true }
+        );
       } else {
-        // Validate main content
-        validationResult = await validateResponse(editedContent, blockType)
+        validationResult = await validateResponse(editedContent, blockType);
       }
-
-      setValidation(validationResult)
+      setValidation(validationResult);
 
       if (validationResult.isValid) {
-        // Proceed with save if validation passes
-        if (field && response.outputs) {
-          const updatedResponse = {
-            ...response,
-            outputs: editedOutputs,
-            editedAt: new Date().toISOString(),
-          }
-          onUpdate(updatedResponse)
-          setEditingField(null)
-        } else {
-          const updatedResponse = {
-            ...response,
-            content: editedContent,
-            editedAt: new Date().toISOString(),
-          }
-          onUpdate(updatedResponse)
-          setIsEditing(false)
+        // Construct updatedResponse according to block type
+        let updatedResponse: BlockResponse = { ...response!, editedAt: new Date().toISOString() };
+
+        if (blockType === "standard") {
+          updatedResponse.content = editedContent;
+        } else if (blockType === "discretization") {
+          updatedResponse.outputs = editingField
+            ? { ...(response?.outputs ?? {}), ...editedOutputs }
+            : response?.outputs ?? {};
+        } else if (blockType === "single_list" || blockType === "multi_list") {
+          updatedResponse.list_output = editedList;
+        } else if (blockType === "matrix") {
+          updatedResponse.matrix_output = editedMatrix;
         }
-        setValidation(null)
+        console.log("Updated response:", updatedResponse);
+
+        onUpdate(updatedResponse);
+        setIsEditing(false);
+        setEditingField(null);
+        setValidation(null);
       }
     } catch (error) {
       setValidation({
         isValid: false,
         errors: ["Validation failed. Please try again."],
         warnings: [],
-      })
+      });
     } finally {
-      setIsValidating(false)
+      setIsValidating(false);
     }
-  }
+  };
 
-  const handleCancel = (field?: string) => {
-    setValidation(null)
-    if (field) {
-      setEditingField(null)
-      setEditedOutputs({})
-    } else {
-      setIsEditing(false)
-      setEditedContent("")
-    }
-  }
+  // ---- Cancel Edit ----
+  const handleCancel = () => {
+    setValidation(null);
+    setIsEditing(false);
+    setEditingField(null);
+    setEditedContent("");
+    setEditedOutputs({});
+    setEditedList(safeCopy(response?.list_output, []));
+    setEditedMatrix(safeCopy(response?.matrix_output, {}));
+  };
 
+  // ---- Input Handlers ----
   const handleOutputChange = (outputKey: string, value: string) => {
     setEditedOutputs((prev) => ({
       ...prev,
       [outputKey]: value,
-    }))
-    // Clear validation when user starts typing
-    if (validation) {
-      setValidation(null)
-    }
-  }
-
+    }));
+    if (validation) setValidation(null);
+  };
   const handleContentChange = (value: string) => {
-    setEditedContent(value)
-    // Clear validation when user starts typing
-    if (validation) {
-      setValidation(null)
-    }
+    setEditedContent(value);
+    if (validation) setValidation(null);
+  };
+  // For lists/matrix, add similar update logic...
+  console.log("coming hereee before erro", response, blockType, editedList, editedMatrix);
+
+  if( !response ) {
+    return <div className="text-gray-500">No response available.</div>;
   }
+  // ---- Renderers ----
+  const renderStandard = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-base font-medium">Response:</h4>
+        {!isEditing && (
+          <Button size="sm" onClick={() => handleStartEdit()} variant="ghost">
+            <Edit3 className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+      {isEditing ? (
+        <div>
+          <Textarea
+            value={editedContent}
+            onChange={(e) => handleContentChange(e.target.value)}
+            placeholder="Edit response..."
+          />
+          {renderValidationFeedback()}
+          <div className="flex gap-2 mt-2">
+            <Button size="sm" onClick={() => handleValidateAndSave()} disabled={isValidating}>
+              <Save className="h-4 w-4 mr-1" />
+              Save
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleCancel} disabled={isValidating}>
+              <X className="h-4 w-4 mr-1" />
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-gray-700 cursor-pointer" onClick={() => handleStartEdit()}>{response?.content}</div>
+      )}
+    </div>
+  );
 
-  const renderValidationFeedback = () => {
-    if (!validation) return null
+  const renderDiscretization = () => (
+    <div className="space-y-4">
+      <h4 className="text-base font-medium">Outputs:</h4>
+      {Object.entries(response?.outputs ?? {}).map(([key, value]) => (
+        <div key={key} className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">{key}:</span>
+            {!isEditing && (
+              <Button size="sm" variant="ghost" onClick={() => handleStartEdit(key)}>
+                <Edit3 className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+          {isEditing && editingField === key ? (
+            <div>
+              <Textarea
+                value={editedOutputs[key] ?? value}
+                onChange={(e) => handleOutputChange(key, e.target.value)}
+                placeholder={`Edit ${key}...`}
+              />
+              {renderValidationFeedback()}
+              <div className="flex gap-2 mt-2">
+                <Button size="sm" onClick={() => handleValidateAndSave(key)} disabled={isValidating}>
+                  <Check className="h-3 w-3 mr-1" />
+                  Save
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleCancel} disabled={isValidating}>
+                  <X className="h-3 w-3 mr-1" />
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-gray-700 text-sm cursor-pointer" onClick={() => handleStartEdit(key)}>"{value}"</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 
+  // Minimal list/matrix editor for now (implement full table editor as needed)
+  const renderList = () => (
+    <div className="space-y-4">
+      <h4 className="text-base font-medium">List Output:</h4>
+      <Textarea
+        value={JSON.stringify(editedList, null, 2)}
+        onChange={e => setEditedList(JSON.parse(e.target.value || "[]"))}
+        className="font-mono"
+        rows={4}
+      />
+      <div className="flex gap-2 mt-2">
+        <Button size="sm" onClick={() => handleValidateAndSave()} disabled={isValidating}>
+          <Save className="h-4 w-4 mr-1" /> Save
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleCancel} disabled={isValidating}>
+          <X className="h-4 w-4 mr-1" /> Cancel
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderMatrix = () => (
+    <div className="space-y-4">
+      <h4 className="text-base font-medium">Matrix Output:</h4>
+      <Textarea
+        value={JSON.stringify(editedMatrix, null, 2)}
+        onChange={e => setEditedMatrix(JSON.parse(e.target.value || "{}"))}
+        className="font-mono"
+        rows={6}
+      />
+      <div className="flex gap-2 mt-2">
+        <Button size="sm" onClick={() => handleValidateAndSave()} disabled={isValidating}>
+          <Save className="h-4 w-4 mr-1" /> Save
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleCancel} disabled={isValidating}>
+          <X className="h-4 w-4 mr-1" /> Cancel
+        </Button>
+      </div>
+    </div>
+  );
+
+  function renderValidationFeedback() {
+    if (!validation) return null;
     return (
       <div className="space-y-2">
         {validation.errors.length > 0 && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              <div className="space-y-1">
-                <div className="font-medium">Validation Errors:</div>
-                <ul className="list-disc list-inside space-y-1">
-                  {validation.errors.map((error, index) => (
-                    <li key={index} className="text-sm">
-                      {error}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <div className="font-medium">Validation Errors:</div>
+              <ul className="list-disc ml-4">
+                {validation.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
             </AlertDescription>
           </Alert>
         )}
-
-        {validation.warnings.length > 0 && (
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              <div className="space-y-1">
-                <div className="font-medium">Warnings:</div>
-                <ul className="list-disc list-inside space-y-1">
-                  {validation.warnings.map((warning, index) => (
-                    <li key={index} className="text-sm">
-                      {warning}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {validation.isValid && validation.errors.length === 0 && (
+        {validation.isValid && (
           <Alert className="border-green-200 bg-green-50">
             <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">Content validation passed successfully!</AlertDescription>
+            <AlertDescription className="text-green-800">
+              Content validation passed successfully!
+            </AlertDescription>
           </Alert>
         )}
       </div>
-    )
+    );
   }
 
-  const renderStandardResponse = () => {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="text-base font-medium text-gray-900">Response:</h4>
-          <div className="flex items-center gap-2">
-            {response.editedAt && <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">Edited</span>}
-            {!isEditing && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleStartEdit()}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                <Edit3 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {isEditing ? (
-          <div className="space-y-3">
-            <Textarea
-              value={editedContent}
-              onChange={(e) => handleContentChange(e.target.value)}
-              className="min-h-[120px] resize-none"
-              placeholder="Edit the response..."
-            />
-
-            {renderValidationFeedback()}
-
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => handleValidateAndSave()}
-                className="bg-green-600 text-white hover:bg-green-700"
-                disabled={isValidating}
-              >
-                {isValidating ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
-                    Validating...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-1" />
-                    Save
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleCancel()}
-                className="bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                disabled={isValidating}
-              >
-                <X className="h-4 w-4 mr-1" />
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="text-sm text-gray-700 leading-relaxed cursor-pointer hover:bg-gray-50 p-2 rounded border border-transparent hover:border-gray-200 transition-colors"
-            onClick={() => handleStartEdit()}
-            title="Click to edit response"
-          >
-            {response.content}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const renderDiscretizationResponse = () => {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="text-base font-medium text-gray-900">Response:</h4>
-          {response.editedAt && <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">Edited</span>}
-        </div>
-
-        <div className="text-sm font-medium text-gray-700 mb-3">Outputs:</div>
-
-        <div className="space-y-4">
-          {response.outputs &&
-            Object.entries(response.outputs).map(([key, value]) => (
-              <div key={key} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">{key}:</span>
-                  {editingField !== key && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleStartEdit(key)}
-                      className="text-gray-600 hover:text-gray-900 p-1"
-                    >
-                      <Edit3 className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-
-                {editingField === key ? (
-                  <div className="space-y-2">
-                    <Textarea
-                      value={editedOutputs[key] || value}
-                      onChange={(e) => handleOutputChange(key, e.target.value)}
-                      className="min-h-[80px] resize-none text-sm"
-                      placeholder={`Edit ${key}...`}
-                    />
-
-                    {renderValidationFeedback()}
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleValidateAndSave(key)}
-                        className="bg-green-600 text-white hover:bg-green-700"
-                        disabled={isValidating}
-                      >
-                        {isValidating ? (
-                          <>
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
-                            Validating...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-3 w-3 mr-1" />
-                            Save
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleCancel(key)}
-                        className="bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                        disabled={isValidating}
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    className="text-gray-600 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded border border-transparent hover:border-gray-200 transition-colors"
-                    onClick={() => handleStartEdit(key)}
-                    title="Click to edit this output"
-                  >
-                    "{value}"
-                  </div>
-                )}
-              </div>
-            ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (blockType === "standard") {
-    return renderStandardResponse()
-  }
-
-  if (blockType === "discretization") {
-    return renderDiscretizationResponse()
-  }
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h4 className="text-base font-medium text-gray-900 mb-2">Response:</h4>
-        <div className="text-sm text-gray-500">Response format not yet implemented for this block type.</div>
-      </div>
-    </div>
-  )
+  // ---- Main return by blockType ----
+  if (!response) return <div>No response yet.</div>;
+  if (blockType === "standard") return renderStandard();
+  if (blockType === "discretization") return renderDiscretization();
+  if (blockType === "single_list" || blockType === "multi_list") return renderList();
+  if (blockType === "matrix") return renderMatrix();
+  return <div>Unknown block type.</div>;
 }

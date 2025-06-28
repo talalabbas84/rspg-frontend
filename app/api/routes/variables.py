@@ -32,7 +32,7 @@ async def create_variable(
     created_variable = await crud_variable.create(db=db, obj_in=variable_in)
     return created_variable
 
-@router.get("/by_sequence/{sequence_id}", response_model=List[variable_schema.VariableRead])
+@router.get("/in_sequence/{sequence_id}", response_model=List[variable_schema.VariableRead])
 async def read_variables_for_sequence(
     parent_sequence: models.Sequence = Depends(get_parent_sequence_for_variable_ops), # Validates sequence ownership
     db: AsyncSession = Depends(get_db)

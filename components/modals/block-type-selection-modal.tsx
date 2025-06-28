@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button"
 interface BlockTypeSelectionModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSelectType: (type: string) => void
+  onSelectBlockType: (type: string) => void
 }
 
-export function BlockTypeSelectionModal({ open, onOpenChange, onSelectType }: BlockTypeSelectionModalProps) {
+export function BlockTypeSelectionModal({ open, onOpenChange, onSelectBlockType }: BlockTypeSelectionModalProps) {
   const blockTypes = [
     { id: "standard", label: "AI Block", description: "Standard AI block with single prompt execution" },
     {
@@ -34,7 +34,7 @@ export function BlockTypeSelectionModal({ open, onOpenChange, onSelectType }: Bl
               key={type.id}
               variant="ghost"
               className="w-full justify-start h-auto p-4 text-left"
-              onClick={() => onSelectType(type.id)}
+              onClick={() => onSelectBlockType(type.id)}
             >
               <div>
                 <div className="font-medium text-gray-900">{type.label}</div>

@@ -1,8 +1,7 @@
 "use client";
 
 import type React from "react";
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,74 +12,45 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { X, Trash2 } from "lucide-react";
-import { useGlobalLists } from "@/hooks/use-global-lists";
-import { toast } from "sonner";
 
-interface CreateListModalProps {
+interface EditListVariableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  variableName: string;
+  initialList?: string[];
+  onSave: (list: string[]) => void;
 }
 
-export function CreateListModal({ open, onOpenChange }: CreateListModalProps) {
-  const [name, setName] = useState("");
-  const [values, setValues] = useState<string[]>([""]);
-  const { createGlobalList } = useGlobalLists();
+export function EditListVariableDialog({
+  open,
+  onOpenChange,
+  variableName,
+  initialList = [],
+  onSave,
+}: EditListVariableDialogProps) {
+  const [values, setValues] = useState<string[]>(initialList.length ? initialList : [""]);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (open) setValues(initialList.length ? initialList : [""]);
+  }, [open, initialList]);
+
+  const addValue = () => setValues([...values, ""]);
+  const updateValue = (idx: number, val: string) => {
+    setValues((v) => v.map((item, i) => (i === idx ? val : item)));
+  };
+  const removeValue = (idx: number) => {
+    setValues((v) => v.length > 1 ? v.filter((_, i) => i !== idx) : v);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
-    try {
-      const filteredValues = values.filter((value) => value.trim() !== "");
-
-      if (filteredValues.length === 0) {
-        toast.error("List must contain at least one value");
-        setLoading(false);
-        return;
-      }
-      await createGlobalList({
-        name,
-        items: filteredValues.map((val) => {
-          let parsed = val;
-          try {
-            parsed = JSON.parse(val);
-          } catch (_) {
-            // If not valid JSON, keep as string
-          }
-          return { value: parsed };
-        }),
-      });
-
-      console.log("Creating list:", { name, values: filteredValues });
-
-      onOpenChange(false);
-      setName("");
-      setValues([""]);
-
-      // Show success message
-      alert("List created successfully!");
-    } catch (error) {
-      alert("Failed to create list");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addValue = () => {
-    setValues([...values, ""]);
-  };
-
-  const updateValue = (index: number, value: string) => {
-    const newValues = [...values];
-    newValues[index] = value;
-    setValues(newValues);
-  };
-
-  const removeValue = (index: number) => {
-    if (values.length > 1) {
-      setValues(values.filter((_, i) => i !== index));
-    }
+    // Remove blank entries
+    const filtered = values.map(v => v.trim()).filter(Boolean);
+    onSave(filtered);
+    setLoading(false);
+    onOpenChange(false);
   };
 
   return (
@@ -88,7 +58,7 @@ export function CreateListModal({ open, onOpenChange }: CreateListModalProps) {
       <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle>Create New Global List</DialogTitle>
+            <DialogTitle>Edit List: {variableName}</DialogTitle>
             <Button
               variant="ghost"
               size="sm"
@@ -99,29 +69,15 @@ export function CreateListModal({ open, onOpenChange }: CreateListModalProps) {
             </Button>
           </div>
         </DialogHeader>
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="list-name">List Name</Label>
-            <Input
-              id="list-name"
-              placeholder='Enter JSON object (e.g. {"fact": "...", "category": "..."}) or string'
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-
           <div className="space-y-2">
             <Label>List Values</Label>
             <div className="space-y-2">
               {values.map((value, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 w-6">
-                    {index + 1}.
-                  </span>
+                  <span className="text-sm text-gray-500 w-6">{index + 1}.</span>
                   <Input
-                    placeholder="Enter list item"
+                    placeholder="Enter value"
                     value={value}
                     onChange={(e) => updateValue(index, e.target.value)}
                     className="flex-1"
@@ -150,7 +106,6 @@ export function CreateListModal({ open, onOpenChange }: CreateListModalProps) {
               Add Field
             </Button>
           </div>
-
           <div className="flex justify-end gap-2">
             <Button
               type="button"
@@ -164,7 +119,7 @@ export function CreateListModal({ open, onOpenChange }: CreateListModalProps) {
               className="bg-gray-600 text-white hover:bg-gray-700"
               disabled={loading}
             >
-              {loading ? "Creating..." : "Create"}
+              {loading ? "Saving..." : "Save"}
             </Button>
           </div>
         </form>

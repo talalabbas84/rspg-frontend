@@ -1,125 +1,86 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api"; // Your actual ApiClient!
+import type { Variable, GlobalList } from "@/types";
 
-interface AvailableVariable {
-  value: string
-  label: string
-  type: "global" | "list" | "output"
-  description?: string
+export interface AvailableVariable {
+  value: string;
+  label: string;
+  type: "global" | "list" | "output";
+  description?: string;
 }
 
 export function useAvailableVariables(sequenceId?: string) {
-  const [variables, setVariables] = useState<AvailableVariable[]>([])
-  const [loading, setLoading] = useState(true)
+  const [variables, setVariables] = useState<AvailableVariable[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchVariables = async () => {
+ useEffect(() => {
+    let isMounted = true;
+    async function fetchAll() {
+      setLoading(true);
       try {
-        setLoading(true)
+        // 1. Get from backend
+        const rawVars = await apiClient.getAvailableVariablesForSequence(sequenceId || "");
 
-        // Mock data - replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        // 2. Normalize to our frontend type
+        const frontendVars: AvailableVariable[] = rawVars.map((v: any) => {
+          // For global_list with items
+          if (v.type === "global_list" && Array.isArray(v.items)) {
+            return {
+              value: v.name,
+              label: v.name,
+              type: "list",
+              description: v.description,
+              // Add defaultValue as array of string for global lists
+              defaultValue: v.items.map((item: any) => item.value)
+            };
+          }
+          // For any other variable type
+          return {
+            value: v.name,
+            label: v.name,
+            type: v.type === "block_output" ? "output" : v.type === "global_list" ? "list" : v.type,
+            description: v.description,
+            // Add defaultValue for single-value variables
+            defaultValue: v.value
+          };
+        });
 
-        const mockVariables: AvailableVariable[] = [
-          {
-            value: "global",
-            label: "Global Variable",
-            type: "global",
-            description: "Make 5 claims for a biometric water bottle...",
-          },
-          {
-            value: "user_input",
-            label: "User Input",
-            type: "global",
-            description: "User provided input variable",
-          },
-          {
-            value: "system_prompt",
-            label: "System Prompt",
-            type: "global",
-            description: "System-level prompt configuration",
-          },
-          {
-            value: "OP1",
-            label: "Output 1",
-            type: "output",
-            description: "Output from Block 1",
-          },
-          {
-            value: "OP2",
-            label: "Output 2",
-            type: "output",
-            description: "Output from Block 2 (Discretization)",
-          },
-          {
-            value: "claims_output",
-            label: "Claims Output",
-            type: "output",
-            description: "Generated patent claims from previous block",
-          },
-          {
-            value: "NewGlobalList",
-            label: "New Global List",
-            type: "list",
-            description: "List of items for processing",
-          },
-          {
-            value: "items222",
-            label: "Items List",
-            type: "list",
-            description: "Another list of items",
-          },
-          {
-            value: "paragraph_check",
-            label: "Paragraph Check List",
-            type: "list",
-            description: "List for paragraph validation",
-          },
-          {
-            value: "discretized_claims",
-            label: "Discretized Claims",
-            type: "list",
-            description: "Claims broken down into individual components",
-          },
-          {
-            value: "validation_results",
-            label: "Validation Results",
-            type: "output",
-            description: "Results from validation processes",
-          },
-        ]
+        // 3. Filter out anything with no name
+        const deduped = frontendVars.filter(v => typeof v.value === "string" && !!v.value);
 
-        setVariables(mockVariables)
-      } catch (error) {
-        console.error("Failed to fetch variables:", error)
-        setVariables([])
+        if (isMounted) setVariables(deduped);
+      } catch (err) {
+        if (isMounted) setVariables([]);
       } finally {
-        setLoading(false)
+        if (isMounted) setLoading(false);
       }
     }
-
-    fetchVariables()
-  }, [sequenceId])
+    fetchAll();
+    return () => {
+      isMounted = false;
+    };
+  }, [sequenceId]);
 
   const getVariablesByType = (type: "global" | "list" | "output") => {
-    return variables.filter((variable) => variable.type === type)
-  }
+    return variables.filter((v) => v.type === type);
+  };
 
   const searchVariables = (query: string) => {
-    const lowercaseQuery = query.toLowerCase()
+    const q = query.toLowerCase();
     return variables.filter(
-      (variable) =>
-        variable.value.toLowerCase().includes(lowercaseQuery) ||
-        variable.label.toLowerCase().includes(lowercaseQuery) ||
-        (variable.description && variable.description.toLowerCase().includes(lowercaseQuery)),
-    )
-  }
+      (v) =>
+        v.value.toLowerCase().includes(q) ||
+        v.label.toLowerCase().includes(q) ||
+        (v.description && v.description.toLowerCase().includes(q))
+    );
+  };
 
   return {
     variables,
     loading,
     getVariablesByType,
     searchVariables,
-  }
+  };
 }

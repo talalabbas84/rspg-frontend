@@ -69,10 +69,11 @@ export interface Block {
 
 // --- Variables ---
 export interface Variable {
-  id: string
+  id: number
   sequence_id?: string | null // Can be null for user-level globals
   name: string
   value: string
+  value_json?: { [key: string]: any } // For complex types
   type: "global" | "list" | "output" | "input"
   description?: string
   created_at?: string
@@ -90,11 +91,20 @@ export interface AvailableVariable {
 }
 
 // --- Global Lists ---
+export interface GlobalListItem {
+  id: number
+  value: string
+  order?: number
+  global_list_id?: number
+  created_at?: string
+  updated_at?: string
+}
+
 export interface GlobalList {
-  id: string
+  id: number              // Should be number (matches backend)
   name: string
-  values: string[]
-  description?: string
+  items: GlobalListItem[]
+  description?: string | null
   created_at: string
   updated_at: string
 }
@@ -103,11 +113,12 @@ export interface GlobalList {
 export interface CreateBlockData {
   name: string
   sequence_id: string
-  block_type: BlockType
+  type: BlockType
   model: string
   prompt: string
   order_index: number
-  config_json: Partial<BlockConfig>
+  config: Partial<BlockConfig>
+
 }
 
 export interface UpdateBlockData {
@@ -136,4 +147,23 @@ export interface BlockResponse {
   outputs?: { [key: string]: string }
   matrix_output?: { [key: string]: { [key: string]: string } }
   editedAt?: string
+}
+
+
+export interface BlockRun {
+  id: string | number
+  run_id: string | number
+  block_id?: string | number
+  block_name_snapshot?: string
+  block_type_snapshot?: string
+  status: "pending" | "running" | "completed" | "failed" | "cancelled"
+  started_at?: string
+  completed_at?: string
+  prompt_text?: string
+  llm_output_text?: string
+  named_outputs_json?: Record<string, any> | null
+  list_outputs_json?: Record<string, any> | null
+  matrix_outputs_json?: Record<string, any> | null
+  error_message?: string | null
+  // ...add anything else your backend provides
 }

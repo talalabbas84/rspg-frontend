@@ -1,84 +1,133 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Edit, Trash2 } from "lucide-react"
-import type { GlobalList } from "@/types"
-import { EditGlobalListModal } from "@/components/modals/edit-global-list-modal"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Edit, Trash2 } from "lucide-react";
+import type { GlobalList } from "@/types";
+import { EditGlobalListModal } from "@/components/modals/edit-global-list-modal";
+import { toast } from "sonner";
+import { useGlobalLists } from "@/hooks/use-global-lists";
 
 export function GlobalListsList() {
-  const [lists, setLists] = useState<GlobalList[]>([])
-  const [editingList, setEditingList] = useState<GlobalList | null>(null)
-
-  useEffect(() => {
-    // Mock data - replace with actual API call
-    setLists([
-      {
-        id: "1",
-        name: "NewGlobalList",
-        values: ["Item 1", "Item 2", "Item 3"],
-        created_at: "2024-01-01",
-        updated_at: "2024-01-01",
-      },
-      {
-        id: "2",
-        name: "items222",
-        values: ["Item A", "Item B"],
-        created_at: "2024-01-01",
-        updated_at: "2024-01-01",
-      },
-      {
-        id: "3",
-        name: "paragraph_check",
-        values: ["Paragraph 1", "Paragraph 2"],
-        created_at: "2024-01-01",
-        updated_at: "2024-01-01",
-      },
-      {
-        id: "4",
-        name: "paragraph_check",
-        values: ["Check 1", "Check 2"],
-        created_at: "2024-01-01",
-        updated_at: "2024-01-01",
-      },
-      {
-        id: "5",
-        name: "paragraph_check",
-        values: ["Final check"],
-        created_at: "2024-01-01",
-        updated_at: "2024-01-01",
-      },
-    ])
-  }, [])
+  const [lists, setLists] = useState<GlobalList[]>([]);
+  const [editingList, setEditingList] = useState<GlobalList | null>(null);
+  const { globalLists, updateGlobalList, deleteGlobalList } = useGlobalLists(); // Assuming this hook is used for fetching global lists
 
   const handleEdit = (list: GlobalList) => {
-    setEditingList(list)
-  }
+    setEditingList(list);
+  };
 
   const handlePreview = (listId: string) => {
     // Implement preview functionality
-    console.log("Previewing list:", listId)
+    console.log("Previewing list:", listId);
+  };
+
+  function renderValue(value: any): React.ReactNode {
+    if (value == null) return <span className="text-gray-400">null</span>;
+    if (typeof value === "string") {
+      return value;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return value.toString();
+    }
+    if (Array.isArray(value)) {
+      // Display up to 2 elements, add ellipsis if long
+      return (
+        <span>
+          [
+          {value.slice(0, 2).map((v, idx) => (
+            <span key={idx}>
+              {renderValue(v)}
+              {idx < value.length - 1 && ", "}
+            </span>
+          ))}
+          {value.length > 2 ? ", ..." : ""}]
+        </span>
+      );
+    }
+    if (typeof value === "object") {
+      // Display as key: value, but short, like "fact: ..., category: ..."
+      return (
+        <span>
+          {Object.entries(value)
+            .slice(0, 3)
+            .map(([k, v], idx, arr) => (
+              <span key={k}>
+                <span className="font-semibold">{k}</span>: {renderValue(v)}
+                {idx < arr.length - 1 ? ", " : ""}
+              </span>
+            ))}
+          {Object.keys(value).length > 3 ? ", ..." : ""}
+        </span>
+      );
+    }
+    // fallback
+    return JSON.stringify(value);
   }
 
   const handleDelete = (listId: string) => {
-    setLists(lists.filter((list) => list.id !== listId))
-  }
+    deleteGlobalList(listId)
+      .then(() => {
+        setLists((prev) => prev.filter((list) => list.id !== listId));
+      })
+      .catch((error) => {
+        console.error("Failed to delete list:", error);
+      });
+  };
 
-  const handleUpdateList = (updatedList: GlobalList) => {
-    setLists(lists.map((list) => (list.id === updatedList.id ? updatedList : list)))
-    setEditingList(null)
-  }
+  const handleUpdateList = async (updatedList: GlobalList) => {
+    try {
+      const newList = await updateGlobalList(updatedList.id, updatedList);
+      setLists((prev) =>
+        prev.map((list) => (list.id === newList.id ? newList : list))
+      );
+    } catch (error) {
+      console.error("Failed to update list:", error);
+    }
+
+    setEditingList(null);
+  };
+  console.log(globalLists, "globalLists");
 
   return (
     <>
       <div className="space-y-3">
-        {lists.map((list) => (
+        {globalLists.length === 0 && (
+          <Card className="p-4 text-gray-500 bg-gray-50 border-dashed border-2 border-gray-200 text-center">
+            No global lists found.
+          </Card>
+        )}
+        {globalLists.map((list) => (
           <Card key={list.id} className="p-4 bg-white border border-gray-200">
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-gray-900">Variable Name</div>
-              <div className="text-sm text-gray-600">{list.name}</div>
-              <div className="flex items-center gap-2">
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-900">List Name</div>
+              <div className="text-base text-gray-800">{list.name}</div>
+
+              <div className="text-sm font-medium text-gray-900 mt-2">
+                Values
+              </div>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {list.items && list.items.length > 0 ? (
+                  list.items.map((item: any, idx: number) => (
+                    <span
+                      key={item.id || idx}
+                      className="inline-block bg-gray-100 text-gray-700 rounded-full px-3 py-1 text-xs font-medium  truncate"
+                      title={
+                        typeof item.value === "string"
+                          ? item.value
+                          : JSON.stringify(item.value)
+                      }
+                    >
+                      {renderValue(item.value)}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-gray-400">No values</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 mt-4">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -110,5 +159,5 @@ export function GlobalListsList() {
         onUpdate={handleUpdateList}
       />
     </>
-  )
+  );
 }
