@@ -120,7 +120,6 @@ export function DraggableVariableChip({
     return value.substring(0, maxLength) + "..."
   }
 
-  console.log("draggable variable before error")
 
   return (
     <TooltipProvider>

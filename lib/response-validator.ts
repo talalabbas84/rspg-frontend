@@ -15,7 +15,7 @@ export interface ValidationOptions {
 }
 
 export async function validateResponse(
-  content: string,
+  content: any,
   blockType: string,
   options: ValidationOptions = {},
 ): Promise<ValidationResult> {
@@ -26,31 +26,88 @@ export async function validateResponse(
     suggestions: [],
   }
 
-  // Basic content validation
-  await validateBasicContent(content, result, options)
+  // STRING
+  if (typeof content === "string") {
+    await validateBasicContent(content, result, options);
 
-  // Block-type specific validation
-  switch (blockType) {
-    case "standard":
-      await validateStandardResponse(content, result, options)
-      break
-    case "discretization":
-      await validateDiscretizationResponse(content, result, options)
-      break
-    case "single_list":
-      await validateSingleListResponse(content, result, options)
-      break
-    case "multi_list":
-      await validateMultiListResponse(content, result, options)
-      break
+    switch (blockType) {
+      case "standard":
+        await validateStandardResponse(content, result, options);
+        break;
+      case "discretization":
+        await validateDiscretizationResponse(content, result, options);
+        break;
+      case "single_list":
+        await validateSingleListResponse(content, result, options);
+        break;
+      case "multi_list":
+        await validateMultiListResponse(content, result, options);
+        break;
+    }
+  }
+  // ARRAY (could be list or matrix)
+  else if (Array.isArray(content)) {
+    if (content.length === 0) {
+      result.errors.push(
+        blockType === "matrix" || blockType === "multi_list"
+          ? "Matrix/List cannot be empty"
+          : "List cannot be empty"
+      );
+    }
+    for (let i = 0; i < content.length; i++) {
+      const item = content[i];
+      if (Array.isArray(item)) {
+        // Matrix row (for multi_list or matrix as 2D array)
+        for (let j = 0; j < item.length; j++) {
+          const cell = item[j];
+          if (typeof cell === "string") {
+            const cellRes = await validateResponse(cell, "single_list", options);
+            if (!cellRes.isValid) {
+              result.errors.push(`Row ${i + 1}, Col ${j + 1}: ${cellRes.errors.join(", ")}`);
+            }
+            if (cellRes.warnings) result.warnings.push(...cellRes.warnings);
+          }
+        }
+      } else if (typeof item === "string") {
+        // Flat list (single_list or multi_list)
+        const itemRes = await validateResponse(item, "single_list", options);
+        if (!itemRes.isValid) {
+          result.errors.push(`Item ${i + 1}: ${itemRes.errors.join(", ")}`);
+        }
+        if (itemRes.warnings) result.warnings.push(...itemRes.warnings);
+      }
+    }
+  }
+  // OBJECT WITH values (e.g. { values: [][] })
+  else if (content && typeof content === "object" && Array.isArray(content.values)) {
+    const { values } = content;
+    if (values.length === 0) {
+      result.errors.push("Matrix cannot be empty");
+    }
+    // Treat each cell as single_list
+    for (let r = 0; r < values.length; r++) {
+      const row = values[r];
+      if (!Array.isArray(row)) continue;
+      for (let c = 0; c < row.length; c++) {
+        const cell = row[c];
+        if (typeof cell === "string") {
+          const cellRes = await validateResponse(cell, "single_list", options);
+          if (!cellRes.isValid) {
+            result.errors.push(`Row ${r + 1}, Col ${c + 1}: ${cellRes.errors.join(", ")}`);
+          }
+          if (cellRes.warnings) result.warnings.push(...cellRes.warnings);
+        }
+      }
+    }
+  }
+  // UNSUPPORTED
+  else {
+    result.warnings.push("Cannot validate content: unsupported format");
   }
 
-  // Set overall validity
-  result.isValid = result.errors.length === 0
-
-  return result
+  result.isValid = result.errors.length === 0;
+  return result;
 }
-
 async function validateBasicContent(
   content: string,
   result: ValidationResult,

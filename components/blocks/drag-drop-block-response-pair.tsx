@@ -50,11 +50,19 @@ interface BlockResponsePairProps {
   onInputOverrideChange: (varName: string, value: string) => void;
   inputOverrides: { [k: string]: string };
   refetchRun?: () => void; // Optional, if parent needs to refresh run state
+  setLiveBlockResponses: (
+    responses: Record<string, BlockResponse & { isLive: boolean }>
+  ) => void;
+  onRunBlock?: (
+    blockId: string,
+    inputs: Record<string, string>
+  ) => Promise<void>;
   onRerunFromBlock?: (
     runId: string,
     blockId: string,
     overrides: Record<string, string>
   ) => Promise<void>;
+  setInputOverrides: (overrides: Record<string, string>) => void; // Allow parent to update input overrides
 }
 export function DragDropBlockResponsePair({
   block,
@@ -65,6 +73,9 @@ export function DragDropBlockResponsePair({
   inputOverrides,
   onRerunFromBlock,
   refetchRun,
+  setLiveBlockResponses,
+  onRunBlock,
+  setInputOverrides,
 }: BlockResponsePairProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -101,14 +112,18 @@ export function DragDropBlockResponsePair({
     return matches;
   }
   const [usedVariables, setUsedVariables] = useState<any[]>([]);
+
   useEffect(() => {
     const foundVars = extractVars(currentPrompt);
+    console.log("Found variables in prompt:", foundVars, variables);
     setUsedVariables(
       foundVars.map((name) => ({
         id: name,
         name,
-        value: variables.find((v) => v.value === name)?.value || "",
-        type: variables.find((v) => v.value === name)?.type || "global",
+        label: name,
+        value: variables.find((v) => v.label === name)?.value || "",
+        defaultValue: variables.find((v) => v.label === name)?.value || "",
+        type: variables.find((v) => v.label === name)?.type || "global",
         description: `Variable: ${name}`,
       }))
     );
@@ -155,6 +170,20 @@ export function DragDropBlockResponsePair({
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
+  useEffect(() => {
+    setInputOverrides((prev) => {
+      const updated = { ...prev };
+      usedVariables.forEach((v) => {
+        console.log("Checking variable:", v);
+        if (updated[v.name] == null || updated[v.name] === "") {
+          updated[v.name] =
+            getPrevBlockOutput(v.name) ?? v.defaultValue ?? v.value ?? "";
+        }
+      });
+      return updated;
+    });
+  }, [usedVariables]);
+
   const getBadgeLabel = (blockType: string) => {
     switch (blockType) {
       case "standard":
@@ -180,6 +209,27 @@ export function DragDropBlockResponsePair({
     }
   };
 
+  function getPrevBlockOutput(variableName) {
+    // sequenceRunResult/block_runs should be passed down or accessible
+    if (!response || !response.runId || !response.blockId) return undefined;
+    // Find block runs before this block
+    const blockRuns = response.blockRuns || []; // You need to pass this as a prop
+    if (!blockRuns.length) return undefined;
+    // Find the most recent block_run with this output
+    for (let i = blockRuns.length - 1; i >= 0; i--) {
+      const br = blockRuns[i];
+
+      if (
+        br.completed_at &&
+        br.named_outputs_json &&
+        br.named_outputs_json[variableName] !== undefined
+      ) {
+        return br.named_outputs_json[variableName];
+      }
+    }
+    return undefined;
+  }
+
   // --- Block Actions ---
   const handleEdit = () => onEdit?.(block);
   const handleDelete = () => {
@@ -188,7 +238,9 @@ export function DragDropBlockResponsePair({
 
   // --- Variable Actions ---
   const handleAddVariable = (variable: string) =>
-    setCurrentPrompt((prev) => prev + (prev ? " " : "") + `<<${variable}>>`);
+    setCurrentPrompt(
+      (prev) => prev + (prev ? " " : "") + `<<${variable.name}>>`
+    );
   const handleRemoveVariable = (name: string) => {
     setCurrentPrompt((prev) =>
       prev
@@ -197,23 +249,27 @@ export function DragDropBlockResponsePair({
         .trim()
     );
   };
+
   const handleVariableClick = (variable: string) =>
     setSelectedVariable(variable);
-
   // --- Output/Run Button Section ---
-  const handleRunBlock = async () => {
-    setIsRunning(true);
-    try {
-      const inputsToSend: Record<string, string> = {};
-      usedVariables.forEach((variable) => {
-        const overrideVal = inputOverrides[variable.name];
-        inputsToSend[variable.name] = overrideVal ?? "";
-      });
-      await runBlock(block.id, inputsToSend); // Parent will refresh outputs
-    } finally {
-      setIsRunning(false);
-    }
-  };
+  // In parent component, on block run:
+  // setLiveBlockResponses((prev) => ({
+  //   ...prev,
+  //   [block.id]: {
+  //     id: `live-${block.id}`,
+  //     blockId: String(block.id),
+  //     content: res.llm_output_text ?? "", // <<--- map correctly!
+  //     outputs: res.named_outputs_json ?? {},
+  //     matrix_output: res.matrix_outputs_json ?? {},
+  //     list_output: res.list_outputs_json ?? null,
+  //     editedAt: res.completed_at ?? null,
+  //     isLive: true,
+  //     runId: res.run_id ?? null,
+  //     blockRunId: res.id ?? null,
+  //     inputs,
+  //   },
+  // }));
 
   // Utility to get output variable name (from block config or default)
   function getOutputVariable(block: Block): string {
@@ -232,28 +288,32 @@ export function DragDropBlockResponsePair({
     }
 
     let named_outputs_json;
+
+    const payload: any = {};
     if (block.type === "standard") {
       const outputVar = getOutputVariable(block);
-      named_outputs_json = {
+      payload.named_outputs_json = {
         [outputVar]: editedResponse.content ?? response.content ?? "",
       };
+      payload.llm_output_text =
+        editedResponse.content ?? response.content ?? null;
     } else if (block.type === "discretization") {
-      named_outputs_json = editedResponse.outputs ?? response.outputs ?? {};
+      payload.named_outputs_json =
+        editedResponse.outputs ?? response.outputs ?? {};
+    } else if (block.type === "single_list") {
+      payload.list_outputs_json = {
+        values: editedResponse.list_output ?? response.list_output ?? [],
+      };
+    } else if (block.type === "multi_list" || block.type === "matrix") {
+      payload.matrix_outputs_json =
+        editedResponse.matrix_output ?? response.matrix_output ?? {};
     }
 
-    const payload = {
-      named_outputs_json,
-      llm_output_text: editedResponse.content ?? response.content ?? null,
-      list_outputs_json:
-        editedResponse.list_output ?? response.list_output ?? null,
-      matrix_outputs_json:
-        editedResponse.matrix_output ?? response.matrix_output ?? null,
-    };
-    console.log("Updated response:", payload);
-
+    // Remove any nulls
     Object.keys(payload).forEach(
       (k) => payload[k] == null && delete payload[k]
     );
+
 
     try {
       const res = await editBlockOutput(
@@ -261,7 +321,6 @@ export function DragDropBlockResponsePair({
         response.blockRunId,
         payload
       );
-      console.log("Response edited:");
       // if (!res) throw new Error("Failed to edit response");
       await refetchRun?.();
       toast({
@@ -286,13 +345,11 @@ export function DragDropBlockResponsePair({
     return null;
   }
 
-  console.log("cominggg hereee before error");
-
   if (!block) return null;
-  if (!response) {
-    // Optionally show placeholder, or nothing
-    return <div className="p-4 text-gray-500">No response available.</div>;
-  }
+  // if (!response) {
+  //   // Optionally show placeholder, or nothing
+  //   return <div className="p-4 text-gray-500">No response available.</div>;
+  // }
 
   return (
     <DndContext
@@ -323,9 +380,18 @@ export function DragDropBlockResponsePair({
             </div>
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleEdit}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEdit}
+                // disabled={!!response?.isLive}
+                title={
+                  response?.isLive ? "Only editable for saved runs" : "Edit"
+                }
+              >
                 <Edit className="h-4 w-4" />
               </Button>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -422,7 +488,13 @@ export function DragDropBlockResponsePair({
                     >
                       <span className="w-32 text-xs">{variable.name}</span>
                       <Textarea
-                        value={inputOverrides[variable.name] ?? ""}
+                        value={
+                          inputOverrides[variable.name] ??
+                          getPrevBlockOutput(variable.name) ??
+                          variable.defaultValue ?? // If override not set, use default
+                          variable.value ?? // If default not set, use value
+                          ""
+                        }
                         placeholder={`Enter value for "${variable.name}"`}
                         onChange={(e) =>
                           onInputOverrideChange(variable.name, e.target.value)
@@ -490,7 +562,7 @@ export function DragDropBlockResponsePair({
               </label>
               <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded border border-blue-200 break-all">
                 {currentPrompt.replace(/<<(\w+)>>/g, (match, variable) => {
-                  const foundVar = variables?.find((v) => v.value === variable);
+                  const foundVar = variables?.find((v) => v.label === variable);
                   return foundVar
                     ? `[${foundVar.value}: ${foundVar.type}]`
                     : `[${variable}: unknown]`;
@@ -502,7 +574,13 @@ export function DragDropBlockResponsePair({
           {/* Block Run Button */}
           <div className="flex flex-col gap-2 mt-3">
             <Button
-              onClick={handleRunBlock}
+              onClick={() => {
+                const inputs: Record<string, string> = {};
+                usedVariables.forEach((v) => {
+                  inputs[v.name] = inputOverrides[v.name] || "";
+                });
+                onRunBlock?.(block.id, inputs);
+              }}
               disabled={isRunning || loading}
               className="bg-blue-600 hover:bg-blue-700 text-white w-full"
             >
@@ -521,6 +599,7 @@ export function DragDropBlockResponsePair({
             response={response}
             blockType={block.type}
             onUpdate={handleEditResponse}
+            editable={!response?.isLive}
           />
         </Card>
       </div>
@@ -529,7 +608,7 @@ export function DragDropBlockResponsePair({
         {activeVariable ? (
           <DraggableVariableChip
             id={activeVariable.name}
-            name={activeVariable.name}
+            name={activeVariable.label ?? activeVariable.name} // for display
             type={activeVariable.type}
             description={activeVariable.description}
             value={activeVariable.value}
@@ -562,7 +641,6 @@ export function DragDropBlockResponsePair({
           setEditGlobalVarDefault("");
         }}
       />
-
     </DndContext>
   );
 }

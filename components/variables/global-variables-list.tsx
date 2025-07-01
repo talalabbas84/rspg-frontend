@@ -38,7 +38,6 @@ export function GlobalVariablesList() {
       alert("Failed to update variable")
     }
   }
-  console.log("GlobalVariablesList rendered with variables:", variables)
 
 
   return (

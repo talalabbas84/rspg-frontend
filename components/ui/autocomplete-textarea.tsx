@@ -124,6 +124,7 @@ export function AutocompleteTextarea({
   }
 
   const selectSuggestion = (option: AutocompleteOption) => {
+    console.log("Selected option:", option)
     if (!triggerInfo || !textareaRef.current) return
 
     const beforeTrigger = value.substring(0, triggerInfo.start - 2) // -2 for "<<"
@@ -238,7 +239,7 @@ export function AutocompleteTextarea({
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900 truncate">{option.value}</span>
+                  <span className="font-medium text-gray-900 truncate">{option.label}</span>
                   <span className={`text-xs px-2 py-1 rounded ${getTypeColor(option.type)}`}>{option.type}</span>
                 </div>
                 {option.description && (

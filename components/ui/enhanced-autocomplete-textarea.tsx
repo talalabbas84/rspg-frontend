@@ -41,6 +41,7 @@ export function EnhancedAutocompleteTextarea({
   rows = 4,
   ...props
 }: EnhancedAutocompleteTextareaProps) {
+  console.log(options, "autocomplete options");
   // Add state for cursor position tracking
   const [cursorPosition, setCursorPosition] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -70,27 +71,39 @@ export function EnhancedAutocompleteTextarea({
       const match = textBeforeCaret.match(triggerPattern);
 
       if (match) {
+        console.log("Caret position:", match);
+
         const query = match[1].toLowerCase();
         const triggerStart = caretPos - match[0].length + 2;
 
         if (query.length >= minChars) {
           const filteredOptions = options
-            .filter(
-              (option) =>
+            .filter((option) => {
+              if (typeof option.label !== "string") return false;
+              if (option.label.toLowerCase().includes(query)) return true;
+              if (
                 typeof option.value === "string" &&
-                typeof option.label === "string" &&
-                (option.value.toLowerCase().includes(query) ||
-                  option.label.toLowerCase().includes(query))
-            )
+                option.value.toLowerCase().includes(query)
+              )
+                return true;
+              return false;
+            })
             .slice(0, maxSuggestions);
 
           if (filteredOptions.length > 0) {
+            console.log("Filtered options:", filteredOptions);
             setSuggestions(filteredOptions);
             setTriggerInfo({
               start: triggerStart,
               end: caretPos,
               query: match[1],
             });
+            console.log("Trigger info:", {
+              start: triggerStart,
+              end: caretPos,
+              query: match[1],
+            });
+
             setSelectedIndex(0);
             setShowSuggestions(true);
             return;
@@ -104,6 +117,8 @@ export function EnhancedAutocompleteTextarea({
     [options, triggerPattern, minChars, maxSuggestions]
   );
 
+  // Handle input change and update suggestions
+  console.log(showSuggestions, "show suggestions");
   const handleInputChange = (newValue: string) => {
     onChange(newValue);
 
@@ -148,7 +163,9 @@ export function EnhancedAutocompleteTextarea({
 
     const beforeTrigger = value.substring(0, triggerInfo.start - 2);
     const afterCaret = value.substring(triggerInfo.end);
-    const newValue = beforeTrigger + `<<${option.value}>>` + afterCaret;
+    const newValue = beforeTrigger + `<<${option.label}>>` + afterCaret;
+
+    console.log("Selected option:", newValue);
 
     onChange(newValue);
     setShowSuggestions(false);
@@ -156,7 +173,7 @@ export function EnhancedAutocompleteTextarea({
     setTimeout(() => {
       const textarea = containerRef.current?.querySelector("textarea");
       if (textarea) {
-        const newCaretPos = beforeTrigger.length + option.value.length + 4;
+        const newCaretPos = beforeTrigger.length + option.label.length + 4;
         textarea.setSelectionRange(newCaretPos, newCaretPos);
         textarea.focus();
       }
@@ -211,6 +228,8 @@ export function EnhancedAutocompleteTextarea({
     ? getSuggestionPosition()
     : { top: 0, left: 0 };
 
+  console.log(availableVariables, "available variables");
+
   return (
     <div ref={containerRef} className="relative">
       <div
@@ -225,7 +244,7 @@ export function EnhancedAutocompleteTextarea({
           onChange={handleInputChange}
           placeholder={placeholder}
           className={className}
-          availableVariables={availableVariables}
+          availableVariables={availableVariables.map((v) => v.label ?? v.name)}
           onVariableClick={handleVariableClick}
           onCursorPositionChange={handleCursorPositionChange}
           disabled={disabled}
@@ -236,10 +255,10 @@ export function EnhancedAutocompleteTextarea({
 
       {showSuggestions && (
         <div
-          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto min-w-64"
+          className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto min-w-64"
           style={{
-            top: `${position.top}px`,
-            left: `${position.left}px`,
+            top: "100%", // Just below the textarea
+            left: 0,
           }}
         >
           <div className="p-2 text-xs text-gray-500 border-b border-gray-100">
@@ -257,7 +276,7 @@ export function EnhancedAutocompleteTextarea({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-gray-900 truncate">
-                    {option.value}
+                    {option.label}
                   </span>
                   <span
                     className={`text-xs px-2 py-1 rounded ${getTypeColor(

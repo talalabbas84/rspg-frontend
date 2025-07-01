@@ -46,7 +46,6 @@ export function GlobalVariablesProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     fetchVariables()
   }, [fetchVariables])
-  console.log("GlobalVariablesProvider rendered with variables:", error)
 
   // Create new global variable
   const createVariable = useCallback(

@@ -88,7 +88,6 @@ export function GlobalListsList() {
 
     setEditingList(null);
   };
-  console.log(globalLists, "globalLists");
 
   return (
     <>

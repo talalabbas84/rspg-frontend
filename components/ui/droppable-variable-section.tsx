@@ -1,39 +1,53 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ChevronDown, Plus, Search, Filter, Eye, EyeOff, RotateCcw, Shuffle } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { DraggableVariableChip } from "./draggable-variable-chip"
-import { cn } from "@/lib/utils"
-import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  ChevronDown,
+  Plus,
+  Search,
+  Filter,
+  Eye,
+  EyeOff,
+  RotateCcw,
+  Shuffle,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { DraggableVariableChip } from "./draggable-variable-chip";
+import { cn } from "@/lib/utils";
+import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 
 interface Variable {
-  name: string
-  type: "global" | "list" | "output"
-  description?: string
-  value?: string
+  name: string;
+  label?: string;
+  type: "global" | "list" | "output";
+  description?: string;
+  value?: string;
 }
 
 interface DroppableVariableSectionProps {
-  variables: Variable[]
-  title: string
-  onAddVariable?: () => void
-  onRemoveVariable?: (variableName: string) => void
-  onViewVariable?: (variable: Variable) => void
-  onReorderVariables?: (newOrder: Variable[]) => void
-  onUpdatePrompt?: (newPrompt: string) => void
-  className?: string
-  collapsible?: boolean
-  defaultOpen?: boolean
-  showSearch?: boolean
-  showFilter?: boolean
-  emptyMessage?: string
-  droppableId: string
-  currentPrompt?: string
+  variables: Variable[];
+  title: string;
+  onAddVariable?: () => void;
+  onRemoveVariable?: (variableName: string) => void;
+  onViewVariable?: (variable: Variable) => void;
+  onReorderVariables?: (newOrder: Variable[]) => void;
+  onUpdatePrompt?: (newPrompt: string) => void;
+  className?: string;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  showSearch?: boolean;
+  showFilter?: boolean;
+  emptyMessage?: string;
+  droppableId: string;
+  currentPrompt?: string;
 }
 
 export function DroppableVariableSection({
@@ -53,23 +67,12 @@ export function DroppableVariableSection({
   droppableId,
   currentPrompt = "",
 }: DroppableVariableSectionProps) {
-  console.log("=== DroppableVariableSection DEBUG ===")
-  console.log("Received variables:", variables)
-  console.log("Variables length:", variables?.length)
-  console.log("Variables type:", typeof variables)
-  console.log("Is array:", Array.isArray(variables))
-
-  if (variables && variables.length > 0) {
-    variables.forEach((v, i) => {
-      console.log(`Variable ${i}:`, v)
-      console.log(`  - name: "${v?.name}" (type: ${typeof v?.name})`)
-      console.log(`  - type: "${v?.type}" (type: ${typeof v?.type})`)
-    })
-  }
-  const [isOpen, setIsOpen] = useState(defaultOpen || variables.length > 0)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterType, setFilterType] = useState<"all" | "global" | "list" | "output">("all")
-  const [showDetails, setShowDetails] = useState(false)
+  const [isOpen, setIsOpen] = useState(defaultOpen || variables.length > 0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<
+    "all" | "global" | "list" | "output"
+  >("all");
+  const [showDetails, setShowDetails] = useState(false);
   // const [draggedOver, setDraggedOver] = useState(false)
 
   // const { isOver, setNodeRef } = useDroppable({
@@ -77,94 +80,109 @@ export function DroppableVariableSection({
   // })
 
   if (!variables || !Array.isArray(variables)) {
-    console.warn("DroppableVariableSection: Invalid variables prop", variables)
+    console.warn("DroppableVariableSection: Invalid variables prop", variables);
     return (
       <div className={className}>
         <div className="text-center py-8 text-gray-500">
           <p>No variables available</p>
         </div>
       </div>
-    )
+    );
   }
 
   // Simplified validation - just check for basic structure
   const validVariables = variables.filter((variable) => {
-    const isValid = variable && variable.name && typeof variable.name === "string" && variable.name.length > 0
+    const isValid =
+      variable &&
+      variable.name &&
+      typeof variable.name === "string" &&
+      variable.name.length > 0;
 
     if (!isValid) {
-      console.log("Invalid variable filtered out:", variable)
+      console.log("Invalid variable filtered out:", variable);
     }
 
-    return isValid
-  })
+    return isValid;
+  });
 
-  console.log("Valid variables after filtering:", validVariables)
+  console.log("Valid variables after filtering:", validVariables);
 
   if (validVariables.length === 0 && variables.length > 0) {
-    console.warn("DroppableVariableSection: All variables filtered out as invalid", variables)
+    console.warn(
+      "DroppableVariableSection: All variables filtered out as invalid",
+      variables
+    );
   }
 
   const filteredVariables = validVariables.filter((variable) => {
     const matchesSearch =
-      (variable.name && variable.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (variable.description && variable.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesFilter = filterType === "all" || variable.type === filterType
-    return matchesSearch && matchesFilter
-  })
+      (variable.label ?? variable.name)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      (variable.description &&
+        variable.description.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesFilter = filterType === "all" || variable.type === filterType;
+    return matchesSearch && matchesFilter;
+  });
 
   const getVariableCount = (type?: string) => {
-    if (!validVariables || !Array.isArray(validVariables)) return 0
-    if (!type || type === "all") return validVariables.length
-    return validVariables.filter((v) => v && v.type === type).length
-  }
+    if (!validVariables || !Array.isArray(validVariables)) return 0;
+    if (!type || type === "all") return validVariables.length;
+    return validVariables.filter((v) => v && v.type === type).length;
+  };
 
   const handleResetOrder = () => {
     if (onReorderVariables) {
-      const sortedVariables = [...variables].sort((a, b) => a.name.localeCompare(b.name))
-      onReorderVariables(sortedVariables)
-      updatePromptOrder(sortedVariables)
+      const sortedVariables = [...variables].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+      onReorderVariables(sortedVariables);
+      updatePromptOrder(sortedVariables);
     }
-  }
+  };
 
   const handleShuffleOrder = () => {
     if (onReorderVariables) {
-      const shuffledVariables = [...variables].sort(() => Math.random() - 0.5)
-      onReorderVariables(shuffledVariables)
-      updatePromptOrder(shuffledVariables)
+      const shuffledVariables = [...variables].sort(() => Math.random() - 0.5);
+      onReorderVariables(shuffledVariables);
+      updatePromptOrder(shuffledVariables);
     }
-  }
+  };
 
   const updatePromptOrder = (newVariableOrder: Variable[]) => {
-    if (!onUpdatePrompt || !currentPrompt) return
+    if (!onUpdatePrompt || !currentPrompt) return;
 
-    const variableMatches = [...currentPrompt.matchAll(/<<([^>]+)>>/g)]
-    if (variableMatches.length === 0) return
+    const variableMatches = [...currentPrompt.matchAll(/<<([^>]+)>>/g)];
+    if (variableMatches.length === 0) return;
 
-    const orderMap = new Map(newVariableOrder.map((variable, index) => [variable.name, index]))
+    const orderMap = new Map(
+      newVariableOrder.map((variable, index) => [variable.name, index])
+    );
     const sortedMatches = variableMatches.sort((a, b) => {
-      const orderA = orderMap.get(a[1]) ?? 999
-      const orderB = orderMap.get(b[1]) ?? 999
-      return orderA - orderB
-    })
+      const orderA = orderMap.get(a[1]) ?? 999;
+      const orderB = orderMap.get(b[1]) ?? 999;
+      return orderA - orderB;
+    });
 
-    let newPrompt = currentPrompt
-    const usedVariables = new Set<string>()
+    let newPrompt = currentPrompt;
+    const usedVariables = new Set<string>();
 
     variableMatches.forEach((match) => {
-      newPrompt = newPrompt.replace(match[0], "")
-    })
+      newPrompt = newPrompt.replace(match[0], "");
+    });
 
-    newPrompt = newPrompt.replace(/\s+/g, " ").trim()
+    newPrompt = newPrompt.replace(/\s+/g, " ").trim();
 
     sortedMatches.forEach((match) => {
       if (!usedVariables.has(match[1])) {
-        newPrompt += ` <<${match[1]}>>`
-        usedVariables.add(match[1])
+        newPrompt += ` <<${match[1]}>>`;
+        usedVariables.add(match[1]);
       }
-    })
+    });
 
-    onUpdatePrompt(newPrompt.trim())
-  }
+    onUpdatePrompt(newPrompt.trim());
+  };
 
   const SectionContent = () => (
     <div className="space-y-4">
@@ -209,7 +227,11 @@ export function DroppableVariableSection({
               onClick={() => setShowDetails(!showDetails)}
               className="flex items-center gap-1"
             >
-              {showDetails ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showDetails ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
               {showDetails ? "Hide" : "Show"} Details
             </Button>
 
@@ -244,16 +266,22 @@ export function DroppableVariableSection({
         <div className="space-y-3">
           {showDetails ? (
             // Detailed Card View
-            <SortableContext items={filteredVariables.map((v) => v.name)} strategy={rectSortingStrategy}>
+            <SortableContext
+              items={filteredVariables.map((v) => v.name)}
+              strategy={rectSortingStrategy}
+            >
               <div className="grid gap-3">
                 {filteredVariables.map((variable, index) => (
-                  <Card key={variable.name} className="p-4 hover:shadow-md transition-shadow">
+                  <Card
+                    key={variable.name}
+                    className="p-4 hover:shadow-md transition-shadow"
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2">
                           <DraggableVariableChip
-                            id={variable.name}
-                            name={variable.name}
+                            id={variable.label ?? variable.name}
+                            name={variable.label ?? variable.name}
                             type={variable.type}
                             description={variable.description}
                             value={variable.value}
@@ -262,10 +290,16 @@ export function DroppableVariableSection({
                             position={index}
                           />
                         </div>
-                        {variable.description && <p className="text-sm text-gray-600">{variable.description}</p>}
+                        {variable.description && (
+                          <p className="text-sm text-gray-600">
+                            {variable.description}
+                          </p>
+                        )}
                         {variable.value && (
                           <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded font-mono">
-                            {variable.value.length > 100 ? `${variable.value.substring(0, 100)}...` : variable.value}
+                            {variable.value.length > 100
+                              ? `${variable.value.substring(0, 100)}...`
+                              : variable.value}
                           </div>
                         )}
                       </div>
@@ -298,18 +332,29 @@ export function DroppableVariableSection({
             </SortableContext>
           ) : (
             // Compact Chip View with Drag & Drop
-            <SortableContext items={filteredVariables.map((v) => v.name)} strategy={rectSortingStrategy}>
+            <SortableContext
+              items={filteredVariables.map((v) => v.name)}
+              strategy={rectSortingStrategy}
+            >
               <div className="flex flex-wrap gap-2 min-h-[60px] p-3 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/30">
                 {filteredVariables.map((variable, index) => (
                   <DraggableVariableChip
                     key={variable.name}
-                    id={variable.name}
-                    name={variable.name}
+                    id={variable.name} // For drag identity, still use name!
+                    name={variable.label ?? variable.name} // For DISPLAY, use label fallback to name
                     type={variable.type}
                     description={variable.description}
                     value={variable.value}
-                    onRemove={onRemoveVariable ? () => onRemoveVariable(variable.name) : undefined}
-                    onView={onViewVariable ? () => onViewVariable(variable) : undefined}
+                    onRemove={
+                      onRemoveVariable
+                        ? () => onRemoveVariable(variable.name)
+                        : undefined
+                    }
+                    onView={
+                      onViewVariable
+                        ? () => onViewVariable(variable)
+                        : undefined
+                    }
                     position={index}
                   />
                 ))}
@@ -324,8 +369,12 @@ export function DroppableVariableSection({
                 <div>
                   <strong>🎯 Drag & Drop Tips:</strong>
                 </div>
-                <div>• Drag variable chips by their grip handle to reorder them</div>
-                <div>• The prompt will automatically update to match the new order</div>
+                <div>
+                  • Drag variable chips by their grip handle to reorder them
+                </div>
+                <div>
+                  • The prompt will automatically update to match the new order
+                </div>
                 <div>• Use the reset button to sort alphabetically</div>
                 <div>• Use the shuffle button to randomize the order</div>
               </div>
@@ -337,7 +386,12 @@ export function DroppableVariableSection({
           <div className="space-y-2">
             <p>{emptyMessage}</p>
             {onAddVariable && (
-              <Button variant="outline" size="sm" onClick={onAddVariable} className="mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAddVariable}
+                className="mt-2"
+              >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Variable
               </Button>
@@ -348,32 +402,46 @@ export function DroppableVariableSection({
 
       {/* Add Variable Button */}
       {onAddVariable && filteredVariables.length > 0 && (
-        <Button variant="outline" size="sm" onClick={onAddVariable} className="w-full border-dashed hover:border-solid">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onAddVariable}
+          className="w-full border-dashed hover:border-solid"
+        >
           <Plus className="h-4 w-4 mr-1" />
           Add Another Variable
         </Button>
       )}
     </div>
-  )
+  );
 
   if (collapsible) {
     return (
       <Collapsible open={isOpen} onOpenChange={setIsOpen} className={className}>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
+          <Button
+            variant="ghost"
+            className="w-full justify-between p-0 h-auto hover:bg-transparent"
+          >
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-medium text-gray-700">{title}</h3>
               <Badge variant="secondary" className="text-xs">
                 {variables.length}
               </Badge>
               {variables.length > 1 && (
-                <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">
+                <Badge
+                  variant="outline"
+                  className="text-xs text-blue-600 border-blue-200"
+                >
                   {isOpen ? "Drag to reorder" : "Click to expand"}
                 </Badge>
               )}
             </div>
             <ChevronDown
-              className={cn("h-4 w-4 transition-transform duration-200", isOpen && "transform rotate-180")}
+              className={cn(
+                "h-4 w-4 transition-transform duration-200",
+                isOpen && "transform rotate-180"
+              )}
             />
           </Button>
         </CollapsibleTrigger>
@@ -386,7 +454,7 @@ export function DroppableVariableSection({
           </div>
         )}
       </Collapsible>
-    )
+    );
   }
 
   return (
@@ -398,7 +466,10 @@ export function DroppableVariableSection({
             {variables.length}
           </Badge>
           {variables.length > 1 && (
-            <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">
+            <Badge
+              variant="outline"
+              className="text-xs text-blue-600 border-blue-200"
+            >
               Drag to reorder
             </Badge>
           )}
@@ -406,5 +477,5 @@ export function DroppableVariableSection({
       </div>
       <SectionContent />
     </div>
-  )
+  );
 }

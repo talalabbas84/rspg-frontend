@@ -128,6 +128,7 @@ export function EditBlockModal({
         output_names: outputVariableNames.filter((n) => n.trim()),
       };
     } else if (blockType === "single_list") {
+      console.log(inputListName, 'input list name', typeof inputListName);
       return {
         prompt,
         input_list_variable_name: inputListName,
@@ -284,7 +285,7 @@ export function EditBlockModal({
                     <div className="p-2 text-gray-500">No lists available.</div>
                   ) : (
                     listOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
+                      <SelectItem key={option.label} value={option.label}>
                         {option.label}
                       </SelectItem>
                     ))
@@ -324,7 +325,7 @@ export function EditBlockModal({
                           </div>
                         ) : (
                           listOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
+                            <SelectItem key={option.label} value={option.label}>
                               {option.label}
                             </SelectItem>
                           ))

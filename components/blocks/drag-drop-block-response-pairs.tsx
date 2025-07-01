@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Block } from "@/types";
+import type { Block, BlockResponse } from "@/types";
 import { DragDropBlockResponsePair } from "./drag-drop-block-response-pair";
 import { useBlocks } from "@/hooks/use-blocks";
 import { useRunActions } from "@/hooks/use-run-actions";
@@ -17,7 +17,11 @@ export function DragDropBlockResponsePairs({
   onEditBlock,
 }: DragDropBlockResponsePairsProps) {
   const { blocks } = useBlocks(sequenceId);
-  const { runSequence, loading, getRunsForSequence, rerunFromBlock } =
+  const [liveBlockResponses, setLiveBlockResponses] = useState<{
+    [blockId: string]: BlockResponse & { isLive: true };
+  }>({});
+
+  const { runSequence, loading, getRunsForSequence, rerunFromBlock, runBlock } =
     useRunActions();
 
   const [isRunning, setIsRunning] = useState(false);
@@ -61,6 +65,7 @@ export function DragDropBlockResponsePairs({
     try {
       const run = await runSequence(sequenceId, inputOverrides);
       setSequenceRunResult(run);
+      setLiveBlockResponses({}); // Clear ephemeral responses!
     } finally {
       setIsRunning(false);
     }
@@ -86,6 +91,25 @@ export function DragDropBlockResponsePairs({
   function handleInputOverrideChange(varName: string, value: string) {
     setInputOverrides((prev) => ({ ...prev, [varName]: value }));
   }
+  function mapApiBlockRunToBlockResponse(
+    res: any,
+    blockId: string,
+    inputs?: Record<string, string>
+  ) {
+    return {
+      id: `live-${blockId}`,
+      blockId: String(res.block_id ?? blockId),
+      blockRunId: res.id ?? res.blockRunId ?? null, // <- this line
+      content: res.llm_output_text ?? "",
+      outputs: res.named_outputs_json ?? {},
+      matrix_output: res.matrix_outputs_json ?? {},
+      list_output: res.list_outputs_json?.values ?? [],
+      editedAt: res.completed_at ?? null,
+      isLive: true,
+      runId: res.run_id ?? null,
+      inputs,
+    };
+  }
 
   // For a given block, return its run output (if any)
   function getBlockRunResponse(block: Block) {
@@ -102,6 +126,7 @@ export function DragDropBlockResponsePairs({
       outputs: blockRun.named_outputs_json,
       matrix_output: blockRun.matrix_outputs_json,
       editedAt: blockRun.completed_at,
+      list_output: blockRun.list_outputs_json?.values ?? [], // <--- add this line!
     };
   }
 
@@ -123,12 +148,6 @@ export function DragDropBlockResponsePairs({
     );
   }
 
-
-  console.log(
-    "Rendering DragDropBlockResponsePairs",
-    blocks.length,
-    sequenceRunResult?.id
-  );
   return (
     <div className="space-y-8">
       {/* Global "Run Sequence" */}
@@ -141,21 +160,57 @@ export function DragDropBlockResponsePairs({
           {isRunning || loading ? "Running..." : "Run Full Sequence"}
         </button>
       </div>
-      {blocks.map((block) => (
-        <DragDropBlockResponsePair
-          key={block.id}
-          block={block}
-          onEdit={onEditBlock}
-          refetchRun={refetchLatestRun}
-          onInputOverrideChange={handleInputOverrideChange}
-          inputOverrides={inputOverrides}
-          onRerunFromBlock={handleRerunFromBlock}
-          response={{
-            ...getBlockRunResponse(block),
-            runId: sequenceRunResult?.id, // add runId so child can use it
-          }}
-        />
-      ))}
+      {blocks.map((block) => {
+        // fallback: the DB/API response for this block, if any
+        const fallbackResponse = getBlockRunResponse(block);
+        // live: ephemeral result (if any)
+        const liveResponse = liveBlockResponses[block.id];
+
+        // The response we'll show
+        const blockResponse = liveResponse ?? fallbackResponse;
+
+        // Always patch in runId from current sequence
+        // Always patch in blockRunId (from live or fallback)
+        return (
+          <DragDropBlockResponsePair
+            key={block.id}
+            block={block}
+            onEdit={onEditBlock}
+            onRunBlock={async (blockId, inputs) => {
+              setIsRunning(true);
+              try {
+                const res = await runBlock(blockId, inputs);
+                setLiveBlockResponses((prev) => ({
+                  ...prev,
+                  [blockId]: mapApiBlockRunToBlockResponse(
+                    res,
+                    blockId,
+                    inputs
+                  ),
+                }));
+              } finally {
+                setIsRunning(false);
+              }
+            }}
+            refetchRun={refetchLatestRun}
+            setLiveBlockResponses={setLiveBlockResponses}
+            onInputOverrideChange={handleInputOverrideChange}
+            inputOverrides={inputOverrides}
+            onRerunFromBlock={handleRerunFromBlock}
+            setInputOverrides={setInputOverrides}
+            response={
+              blockResponse
+                ? {
+                    ...blockResponse,
+                    runId: sequenceRunResult?.id ?? blockResponse.runId ?? null,
+                    blockRunId: blockResponse.blockRunId ?? null,
+                    blockRuns: sequenceRunResult?.block_runs || [], // <-- add this
+                  }
+                : undefined
+            }
+          />
+        );
+      })}
     </div>
   );
 }

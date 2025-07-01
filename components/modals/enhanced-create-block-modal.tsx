@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, Edit as EditIcon } from "lucide-react";
 import type { BlockType, MultiListConfigItem } from "@/types";
 import { EnhancedAutocompleteTextarea } from "@/components/ui/enhanced-autocomplete-textarea";
 import { useAvailableVariables } from "@/hooks/use-available-variables";
@@ -59,8 +59,17 @@ export function EnhancedCreateBlockModal({
 
   const { variables } = useAvailableVariables(sequenceId);
 
-  // Dynamic handlers
-  // --- Output variable names (discretization) ---
+  // On-the-fly List Variable UI State
+  const [listVars, setListVars] = useState<
+    { name: string; values: string[] }[]
+  >([]);
+  const [showListVarDialog, setShowListVarDialog] = useState(false);
+  const [editingListVarName, setEditingListVarName] = useState("");
+  const [editingListVarValues, setEditingListVarValues] = useState<string[]>(
+    []
+  );
+
+  // Output variable names (discretization)
   const addOutputVariable = () =>
     setOutputVariableNames((prev) => [...prev, ""]);
   const updateOutputVariable = (index: number, value: string) =>
@@ -70,7 +79,7 @@ export function EnhancedCreateBlockModal({
   const removeOutputVariable = (index: number) =>
     setOutputVariableNames((prev) => prev.filter((_, i) => i !== index));
 
-  // --- Multi-list configs ---
+  // Multi-list configs
   const addMultiListConfig = () => {
     setMultiListConfigs((prev) => [
       ...prev,
@@ -89,7 +98,39 @@ export function EnhancedCreateBlockModal({
   const removeMultiListConfig = (id: string) =>
     setMultiListConfigs((prev) => prev.filter((item) => item.id !== id));
 
-  // --- Build config_json for backend ---
+  // List Options: merge backend + new
+  const listOptions = [
+    ...variables.filter((v) => v.type === "list"),
+    ...listVars.map((v) => ({
+      label: v.name,
+      value: v.label,
+      type: "list",
+      custom: true,
+    })),
+  ];
+
+  console.log("List Options:", listOptions);
+
+  // The important bit: merged autocomplete options for EnhancedAutocompleteTextarea
+  const autocompleteOptions = [
+    ...variables.map((v) => ({
+      value: typeof v.value === "string" ? v.value : v.label,
+      label: v.label,
+      type: v.type,
+      description: v.description,
+    })),
+    ...listVars
+      .filter((lv) => !variables.some((v) => v.label === lv.name))
+      .map((v) => ({
+        value: v.name,
+        label: v.name,
+        type: "list",
+        description: "Custom list variable",
+        custom: true,
+      })),
+  ];
+
+  // Build config_json for backend
   function buildConfigJson(): any {
     if (blockType === "standard") {
       return {
@@ -120,7 +161,7 @@ export function EnhancedCreateBlockModal({
     }
   }
 
-  // --- Submit handler ---
+  // Submit handler
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -130,7 +171,8 @@ export function EnhancedCreateBlockModal({
       model,
       sequence_id: Number(sequenceId),
       config_json: buildConfigJson(),
-      order: 0, // backend can auto-handle order, or adjust here if needed
+      list_vars: listVars, // attach custom list vars to payload if backend wants them
+      order: 0,
     };
 
     onCreate(payload);
@@ -144,9 +186,10 @@ export function EnhancedCreateBlockModal({
     setOutputVariableNames([""]);
     setInputListName("");
     setMultiListConfigs([{ id: "1", name: "", priority: 1 }]);
+    setListVars([]);
   }
 
-  // --- UI helpers ---
+  // UI helpers
   const getBlockTypeDescription = () => {
     switch (blockType) {
       case "standard":
@@ -161,8 +204,6 @@ export function EnhancedCreateBlockModal({
         return "";
     }
   };
-  const listOptions = variables.filter(v => v.type === "list");
-
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -261,26 +302,66 @@ export function EnhancedCreateBlockModal({
               </div>
             </Card>
           )}
+
           {blockType === "single_list" && (
             <Card className="p-4">
               <h3 className="font-medium mb-4">Single List Configuration</h3>
               <Label>Input List Name</Label>
-              <Select value={inputListName} onValueChange={setInputListName}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a list..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {listOptions.length === 0 ? (
-                    <div className="p-2 text-gray-500">No lists available.</div>
-                  ) : (
-                    listOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))
+              <div className="flex gap-2 items-center">
+                <Select value={inputListName} onValueChange={setInputListName}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a list..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {listOptions.length === 0 ? (
+                      <div className="p-2 text-gray-500">
+                        No lists available.
+                      </div>
+                    ) : (
+                      listOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {/* Edit button for custom vars */}
+                {inputListName &&
+                  listVars.some((v) => v.name === inputListName) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="ml-2"
+                      onClick={() => {
+                        const found = listVars.find(
+                          (v) => v.name === inputListName
+                        );
+                        if (found) {
+                          setEditingListVarName(found.name);
+                          setEditingListVarValues(found.values);
+                          setShowListVarDialog(true);
+                        }
+                      }}
+                    >
+                      <EditIcon className="h-4 w-4" />
+                    </Button>
                   )}
-                </SelectContent>
-              </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ml-2"
+                  onClick={() => {
+                    setEditingListVarName("");
+                    setEditingListVarValues([]);
+                    setShowListVarDialog(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" /> New List
+                </Button>
+              </div>
               <p className="text-xs text-gray-600 mt-1">
                 The prompt will be applied to each item in this list.
               </p>
@@ -297,29 +378,69 @@ export function EnhancedCreateBlockModal({
                 <div key={item.id} className="flex gap-2 items-end mb-2">
                   <div className="flex-1">
                     <Label>List Name</Label>
-                    <Select
-                      value={item.name}
-                      onValueChange={(value) =>
-                        updateMultiListConfig(item.id, "name", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a list..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {listOptions.length === 0 ? (
-                          <div className="p-2 text-gray-500">
-                            No lists available.
-                          </div>
-                        ) : (
-                          listOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))
+                    <div className="flex gap-2 items-center">
+                      <Select
+                        value={item.name}
+                        onValueChange={(value) =>
+                          updateMultiListConfig(item.id, "name", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a list..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {listOptions.length === 0 ? (
+                            <div className="p-2 text-gray-500">
+                              No lists available.
+                            </div>
+                          ) : (
+                            listOptions.map((option) => (
+                              <SelectItem
+                                key={option.label}
+                                value={option.label}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {/* Edit button for custom vars */}
+                      {item.name &&
+                        listVars.some((v) => v.name === item.name) && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="ml-2"
+                            onClick={() => {
+                              const found = listVars.find(
+                                (v) => v.name === item.name
+                              );
+                              if (found) {
+                                setEditingListVarName(found.name);
+                                setEditingListVarValues(found.values);
+                                setShowListVarDialog(true);
+                              }
+                            }}
+                          >
+                            <EditIcon className="h-4 w-4" />
+                          </Button>
                         )}
-                      </SelectContent>
-                    </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="ml-2"
+                        onClick={() => {
+                          setEditingListVarName("");
+                          setEditingListVarValues([]);
+                          setShowListVarDialog(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" /> New List
+                      </Button>
+                    </div>
                   </div>
                   <div className="w-24">
                     <Label>Priority</Label>
@@ -370,7 +491,7 @@ export function EnhancedCreateBlockModal({
                   value={prompt}
                   onChange={setPrompt}
                   placeholder="Enter your prompt here..."
-                  options={variables}
+                  options={autocompleteOptions}
                   rows={6}
                 />
               </div>
@@ -398,6 +519,73 @@ export function EnhancedCreateBlockModal({
             <Button type="submit">Create Block</Button>
           </div>
         </form>
+
+        {/* ----- Add/Edit List Variable Dialog ----- */}
+        {showListVarDialog && (
+          <Dialog open={showListVarDialog} onOpenChange={setShowListVarDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingListVarName
+                    ? "Edit List Variable"
+                    : "Add List Variable"}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="mb-2">
+                <Label>List Name</Label>
+                <Input
+                  value={editingListVarName}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // Disallow commas, square brackets, etc. (not allowed in variable names)
+                    if (/,|\[|\]/.test(v)) return;
+                    setEditingListVarName(v);
+                  }}
+                  placeholder="countries"
+                  maxLength={40}
+                />
+              </div>
+              <div className="mb-2">
+                <Label>Values (one per line)</Label>
+                <textarea
+                  className="w-full border rounded p-2"
+                  rows={5}
+                  value={editingListVarValues.join("\n")}
+                  onChange={(e) =>
+                    setEditingListVarValues(e.target.value.split("\n"))
+                  }
+                />
+              </div>
+              <div className="flex justify-end gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowListVarDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setListVars((prev) => [
+                      ...prev.filter((v) => v.name !== editingListVarName),
+                      {
+                        name: editingListVarName,
+                        values: editingListVarValues,
+                      },
+                    ]);
+                    setShowListVarDialog(false);
+                  }}
+                  disabled={
+                    !editingListVarName || editingListVarValues.length === 0
+                  }
+                >
+                  Save List
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -52,7 +52,6 @@ export function CreateListModal({ open, onOpenChange }: CreateListModalProps) {
         }),
       });
 
-      console.log("Creating list:", { name, values: filteredValues });
 
       onOpenChange(false);
       setName("");
