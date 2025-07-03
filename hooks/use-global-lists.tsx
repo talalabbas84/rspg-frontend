@@ -109,8 +109,8 @@ export function GlobalListsProvider({ children }: { children: React.ReactNode })
   }, [fetchGlobalLists])
 
   useEffect(() => {
-    fetchGlobalLists()
-  }, [fetchGlobalLists])
+    if (user) fetchGlobalLists()
+  }, [fetchGlobalLists, user])
 
   const value = useMemo(
     () => ({
