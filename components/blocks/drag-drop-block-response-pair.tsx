@@ -349,6 +349,26 @@ export function DragDropBlockResponsePair({
     }
   };
 
+  function getOutputVariables(block) {
+    if (!block?.config_json) return [];
+    if (
+      block.type === "discretization" &&
+      Array.isArray(block.config_json.output_names)
+    ) {
+      return block.config_json.output_names;
+    }
+    // Multi output (if you ever support) can be handled here
+    // Standard: single output var
+    return [
+      block.config_json.output_variable ||
+        block.config_json.output_variable_name ||
+        block.config_json.output_name ||
+        (block.name
+          ? block.name.replace(/\s+/g, "_").toLowerCase()
+          : "main_output"),
+    ].filter(Boolean);
+  }
+
   // --- UI Render ---
   const activeVariable = activeId
     ? usedVariables.find((v) => v.name === activeId)
@@ -438,7 +458,7 @@ export function DragDropBlockResponsePair({
           </div>
 
           {/* Special Configs */}
-          {block.type === "discretization" &&
+          {/* {block.type === "discretization" &&
             block.config_json?.output_names && (
               <div className="mt-2">
                 <label className="text-xs font-semibold">Output Names:</label>
@@ -450,7 +470,7 @@ export function DragDropBlockResponsePair({
                   ))}
                 </div>
               </div>
-            )}
+            )} */}
           {/* --- List Variables Editable Section --- */}
           {usedVariables
             .filter((variable) => variable.type === "list")
@@ -553,6 +573,7 @@ export function DragDropBlockResponsePair({
           />
 
           {/* Prompt (editable) */}
+          {/* Prompt (editable) */}
           <div className="space-y-3 mt-2">
             <label className="text-xs font-semibold">Prompt</label>
             <EnhancedAutocompleteTextarea
@@ -565,6 +586,22 @@ export function DragDropBlockResponsePair({
               disabled={false}
               rows={3}
             />
+            {/* Output Variable Labels */}
+            <div className="space-y-1 mt-2">
+              <label className="text-xs font-semibold">
+                Output Variable{getOutputVariables(block).length > 1 ? "s" : ""}
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {getOutputVariables(block).map((varName) => (
+                  <Badge
+                    key={varName}
+                    className="border bg-yellow-50 text-yellow-800 border-yellow-200 text-xs"
+                  >
+                    {varName}
+                  </Badge>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Preview */}
