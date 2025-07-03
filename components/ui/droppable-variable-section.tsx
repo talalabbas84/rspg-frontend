@@ -105,7 +105,6 @@ export function DroppableVariableSection({
     return isValid;
   });
 
-  console.log("Valid variables after filtering:", validVariables);
 
   if (validVariables.length === 0 && variables.length > 0) {
     console.warn(

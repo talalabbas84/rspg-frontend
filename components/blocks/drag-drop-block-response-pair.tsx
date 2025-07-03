@@ -115,7 +115,6 @@ export function DragDropBlockResponsePair({
 
   useEffect(() => {
     const foundVars = extractVars(currentPrompt);
-    console.log("Found variables in prompt:", foundVars, variables);
     setUsedVariables(
       foundVars.map((name) => ({
         id: name,
@@ -174,7 +173,6 @@ export function DragDropBlockResponsePair({
     setInputOverrides((prev) => {
       const updated = { ...prev };
       usedVariables.forEach((v) => {
-        console.log("Checking variable:", v);
         if (updated[v.name] == null || updated[v.name] === "") {
           updated[v.name] =
             getPrevBlockOutput(v.name) ?? v.defaultValue ?? v.value ?? "";
@@ -275,6 +273,7 @@ export function DragDropBlockResponsePair({
   function getOutputVariable(block: Block): string {
     return (
       block.config_json?.output_variable ||
+      block.config_json?.output_variable_name ||
       block.config_json?.output_name ||
       block.name?.replace(/\s+/g, "_").toLowerCase() ||
       "main_output"
@@ -314,7 +313,6 @@ export function DragDropBlockResponsePair({
       (k) => payload[k] == null && delete payload[k]
     );
 
-
     try {
       const res = await editBlockOutput(
         response.runId,
@@ -322,6 +320,21 @@ export function DragDropBlockResponsePair({
         payload
       );
       // if (!res) throw new Error("Failed to edit response");
+      if (block.type === "standard") {
+        const outputVar = getOutputVariable(block);
+        setInputOverrides((prev) => ({
+          ...prev,
+          [outputVar]: editedResponse.content,
+        }));
+      } else if (block.type === "discretization") {
+        // If you have multiple outputs, set them all
+        Object.entries(editedResponse.outputs || {}).forEach(([k, v]) => {
+          setInputOverrides((prev) => ({
+            ...prev,
+            [k]: v,
+          }));
+        });
+      }
       await refetchRun?.();
       toast({
         title: "Response updated",

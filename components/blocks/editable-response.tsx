@@ -50,7 +50,6 @@ export function EditableResponse({
   blockType,
   onUpdate,
 }: EditableResponseProps) {
-  console.log(response, "EditableResponse Props", response?.list_output);
   // --- State for each output type ---
   const [isEditing, setIsEditing] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -118,7 +117,6 @@ export function EditableResponse({
         validationResult = await validateResponse(editedContent, blockType);
       }
       setValidation(validationResult);
-      console.log("Validation Result:", validationResult);
 
       if (validationResult.isValid) {
         // Construct updatedResponse according to block type
@@ -138,7 +136,6 @@ export function EditableResponse({
         } else if (blockType === "matrix") {
           updatedResponse.matrix_output = editedMatrix;
         }
-        console.log("Updated Response check:", updatedResponse);
 
         onUpdate(updatedResponse);
         setIsEditing(false);
@@ -292,9 +289,7 @@ export function EditableResponse({
     </div>
   );
 
-  console.log("MATRIX RESPONSE DEBUG", { editedMatrix, response });
 
-  console.log("Edited List:", editedList);
   // Minimal list/matrix editor for now (implement full table editor as needed)
   const renderList = () => (
     <div className="space-y-4">

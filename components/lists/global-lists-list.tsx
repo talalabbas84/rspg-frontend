@@ -18,11 +18,6 @@ export function GlobalListsList() {
     setEditingList(list);
   };
 
-  const handlePreview = (listId: string) => {
-    // Implement preview functionality
-    console.log("Previewing list:", listId);
-  };
-
   function renderValue(value: any): React.ReactNode {
     if (value == null) return <span className="text-gray-400">null</span>;
     if (typeof value === "string") {

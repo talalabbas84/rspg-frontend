@@ -298,7 +298,6 @@ Dependent claims: 2. The water bottle of claim 1, wherein the hydration tracking
         open={showCreateVariable}
         onOpenChange={setShowCreateVariable}
         onCreateVariable={(variable) => {
-          console.log("Created variable:", variable)
           setShowCreateVariable(false)
         }}
       />

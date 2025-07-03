@@ -41,7 +41,6 @@ export function EnhancedAutocompleteTextarea({
   rows = 4,
   ...props
 }: EnhancedAutocompleteTextareaProps) {
-  console.log(options, "autocomplete options");
   // Add state for cursor position tracking
   const [cursorPosition, setCursorPosition] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -71,7 +70,6 @@ export function EnhancedAutocompleteTextarea({
       const match = textBeforeCaret.match(triggerPattern);
 
       if (match) {
-        console.log("Caret position:", match);
 
         const query = match[1].toLowerCase();
         const triggerStart = caretPos - match[0].length + 2;
@@ -91,18 +89,13 @@ export function EnhancedAutocompleteTextarea({
             .slice(0, maxSuggestions);
 
           if (filteredOptions.length > 0) {
-            console.log("Filtered options:", filteredOptions);
             setSuggestions(filteredOptions);
             setTriggerInfo({
               start: triggerStart,
               end: caretPos,
               query: match[1],
             });
-            console.log("Trigger info:", {
-              start: triggerStart,
-              end: caretPos,
-              query: match[1],
-            });
+        
 
             setSelectedIndex(0);
             setShowSuggestions(true);
@@ -118,7 +111,6 @@ export function EnhancedAutocompleteTextarea({
   );
 
   // Handle input change and update suggestions
-  console.log(showSuggestions, "show suggestions");
   const handleInputChange = (newValue: string) => {
     onChange(newValue);
 
@@ -165,7 +157,6 @@ export function EnhancedAutocompleteTextarea({
     const afterCaret = value.substring(triggerInfo.end);
     const newValue = beforeTrigger + `<<${option.label}>>` + afterCaret;
 
-    console.log("Selected option:", newValue);
 
     onChange(newValue);
     setShowSuggestions(false);
@@ -228,7 +219,6 @@ export function EnhancedAutocompleteTextarea({
     ? getSuggestionPosition()
     : { top: 0, left: 0 };
 
-  console.log(availableVariables, "available variables");
 
   return (
     <div ref={containerRef} className="relative">

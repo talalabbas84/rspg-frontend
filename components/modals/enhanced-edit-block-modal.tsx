@@ -42,9 +42,8 @@ export function EditBlockModal({
   const [prompt, setPrompt] = useState("");
   const [outputName, setOutputName] = useState("");
   // Discretization
-  const [outputVariableNames, setOutputVariableNames] = useState<string[]>([
-    "",
-  ]);
+  const [numOutputs, setNumOutputs] = useState(1);
+
   // Single List
   const [inputListName, setInputListName] = useState("");
   // Multi List
@@ -68,7 +67,7 @@ export function EditBlockModal({
       setOutputName(block.config_json.output_variable_name ?? "");
     } else if (block.type === "discretization" && block.config_json) {
       setPrompt(block.config_json.prompt ?? "");
-      setOutputVariableNames(block.config_json.output_names ?? [""]);
+      setNumOutputs(block.config_json.output_names?.length ?? 1);
       setOutputName(""); // clear, not used for this type
     } else if (block.type === "single_list" && block.config_json) {
       setPrompt(block.config_json.prompt ?? "");
@@ -86,15 +85,6 @@ export function EditBlockModal({
     // eslint-disable-next-line
   }, [block, open]);
 
-  // --- Discretization output vars handlers ---
-  const addOutputVariable = () =>
-    setOutputVariableNames((prev) => [...prev, ""]);
-  const updateOutputVariable = (index: number, value: string) =>
-    setOutputVariableNames((prev) =>
-      prev.map((v, i) => (i === index ? value : v))
-    );
-  const removeOutputVariable = (index: number) =>
-    setOutputVariableNames((prev) => prev.filter((_, i) => i !== index));
 
   // --- Multi-list configs handlers ---
   const addMultiListConfig = () => {
@@ -125,10 +115,9 @@ export function EditBlockModal({
     } else if (blockType === "discretization") {
       return {
         prompt,
-        output_names: outputVariableNames.filter((n) => n.trim()),
+         output_names: Array.from({ length: numOutputs }, (_, i) => `output_${i + 1}`),
       };
     } else if (blockType === "single_list") {
-      console.log(inputListName, 'input list name', typeof inputListName);
       return {
         prompt,
         input_list_variable_name: inputListName,
@@ -194,7 +183,6 @@ export function EditBlockModal({
                 {getBlockTypeDescription()}
               </p>
             </div>
-      
           </div>
         </DialogHeader>
 
@@ -236,39 +224,14 @@ export function EditBlockModal({
           {blockType === "discretization" && (
             <Card className="p-4">
               <h3 className="font-medium mb-4">Discretization Configuration</h3>
-              <Label>Output Variable Names</Label>
-              <div className="space-y-2">
-                {outputVariableNames.map((name, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      value={name}
-                      onChange={(e) =>
-                        updateOutputVariable(index, e.target.value)
-                      }
-                      placeholder={`output_variable_${index + 1}`}
-                    />
-                    {outputVariableNames.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeOutputVariable(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addOutputVariable}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Output Variable
-                </Button>
-              </div>
+              <Label>Number of Outputs</Label>
+              <Input
+                type="number"
+                min={1}
+                value={numOutputs}
+                onChange={(e) => setNumOutputs(Number(e.target.value))}
+                className="w-32"
+              />
             </Card>
           )}
 

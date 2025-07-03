@@ -124,7 +124,6 @@ export function AutocompleteTextarea({
   }
 
   const selectSuggestion = (option: AutocompleteOption) => {
-    console.log("Selected option:", option)
     if (!triggerInfo || !textareaRef.current) return
 
     const beforeTrigger = value.substring(0, triggerInfo.start - 2) // -2 for "<<"

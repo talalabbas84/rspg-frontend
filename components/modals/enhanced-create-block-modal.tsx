@@ -45,9 +45,7 @@ export function EnhancedCreateBlockModal({
   const [outputName, setOutputName] = useState("");
 
   // Discretization fields
-  const [outputVariableNames, setOutputVariableNames] = useState<string[]>([
-    "",
-  ]);
+  const [numOutputs, setNumOutputs] = useState(1);
 
   // Single List fields
   const [inputListName, setInputListName] = useState("");
@@ -68,16 +66,6 @@ export function EnhancedCreateBlockModal({
   const [editingListVarValues, setEditingListVarValues] = useState<string[]>(
     []
   );
-
-  // Output variable names (discretization)
-  const addOutputVariable = () =>
-    setOutputVariableNames((prev) => [...prev, ""]);
-  const updateOutputVariable = (index: number, value: string) =>
-    setOutputVariableNames((prev) =>
-      prev.map((v, i) => (i === index ? value : v))
-    );
-  const removeOutputVariable = (index: number) =>
-    setOutputVariableNames((prev) => prev.filter((_, i) => i !== index));
 
   // Multi-list configs
   const addMultiListConfig = () => {
@@ -109,7 +97,6 @@ export function EnhancedCreateBlockModal({
     })),
   ];
 
-  console.log("List Options:", listOptions);
 
   // The important bit: merged autocomplete options for EnhancedAutocompleteTextarea
   const autocompleteOptions = [
@@ -140,7 +127,7 @@ export function EnhancedCreateBlockModal({
     } else if (blockType === "discretization") {
       return {
         prompt,
-        output_names: outputVariableNames.filter((n) => n.trim()),
+        output_names: Array.from({ length: numOutputs }, (_, i) => `output_${i + 1}`),
       };
     } else if (blockType === "single_list") {
       return {
@@ -183,7 +170,7 @@ export function EnhancedCreateBlockModal({
     setModel("claude-3-5-sonnet-latest");
     setPrompt("");
     setOutputName("");
-    setOutputVariableNames([""]);
+    setNumOutputs(1);
     setInputListName("");
     setMultiListConfigs([{ id: "1", name: "", priority: 1 }]);
     setListVars([]);
@@ -267,39 +254,14 @@ export function EnhancedCreateBlockModal({
           {blockType === "discretization" && (
             <Card className="p-4">
               <h3 className="font-medium mb-4">Discretization Configuration</h3>
-              <Label>Output Variable Names</Label>
-              <div className="space-y-2">
-                {outputVariableNames.map((name, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      value={name}
-                      onChange={(e) =>
-                        updateOutputVariable(index, e.target.value)
-                      }
-                      placeholder={`output_variable_${index + 1}`}
-                    />
-                    {outputVariableNames.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeOutputVariable(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addOutputVariable}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Output Variable
-                </Button>
-              </div>
+              <Label>Number of Outputs</Label>
+              <Input
+                type="number"
+                min={1}
+                value={numOutputs}
+                onChange={(e) => setNumOutputs(Number(e.target.value))}
+                className="w-32"
+              />
             </Card>
           )}
 
@@ -495,15 +457,17 @@ export function EnhancedCreateBlockModal({
                   rows={6}
                 />
               </div>
-              <div>
-                <Label>Output Name</Label>
-                <Input
-                  value={outputName}
-                  onChange={(e) => setOutputName(e.target.value)}
+              {blockType !== "discretization" && (
+                <div>
+                  <Label>Output Name</Label>
+                  <Input
+                    value={outputName}
+                    onChange={(e) => setOutputName(e.target.value)}
                   placeholder="e.g., processed_claims"
                   required
                 />
               </div>
+              )}
             </div>
           </Card>
 
