@@ -150,6 +150,8 @@ export function DragDropBlockResponsePairs({
     );
   }
 
+  console.log(sequenceRunResult, "sequenceRunResult");
+
   return (
     <div className="space-y-8">
       {/* Global "Run Sequence" */}
@@ -205,7 +207,19 @@ export function DragDropBlockResponsePairs({
                 ? {
                     ...blockResponse,
                     runId: sequenceRunResult?.id ?? blockResponse.runId ?? null,
-                    prompt_text: fallbackResponse.prompt_text ?? "", // <-- add this line!
+                    prompt_text: (() => {
+                      // 1. Use fallback prompt_text if available
+                      if (fallbackResponse && fallbackResponse.prompt_text)
+                        return fallbackResponse.prompt_text;
+                      // 2. Look for a matching block_run and extract prompt_text
+                      const blockRun = sequenceRunResult?.block_runs?.find(
+                        (br: any) => String(br.block_id) === String(block.id)
+                      );
+                      if (blockRun && blockRun.prompt_text)
+                        return blockRun.prompt_text;
+                      // 3. fallback: empty string
+                      return "";
+                    })(),
                     blockRunId: blockResponse.blockRunId ?? null,
                     blockRuns: sequenceRunResult?.block_runs || [], // <-- add this
                   }
