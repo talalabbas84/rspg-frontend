@@ -281,7 +281,7 @@ export function EnhancedCreateBlockModal({
                       </div>
                     ) : (
                       listOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
+                        <SelectItem key={option.label} value={option.label}>
                           {option.label}
                         </SelectItem>
                       ))

@@ -58,7 +58,6 @@ export function DragDropBlockResponsePairs({
     }
     fetchLatestRun();
   }, [sequenceId, getRunsForSequence]);
-
   // Global: Run sequence and save results
   async function handleRunFullSequence() {
     setIsRunning(true);
@@ -123,6 +122,7 @@ export function DragDropBlockResponsePairs({
       blockRunId: blockRun.id,
       blockId: String(block.id),
       content: blockRun.llm_output_text || "No output",
+      prompt_text: blockRun.prompt_text || "", // <-- add this line!
       outputs: blockRun.named_outputs_json,
       matrix_output: blockRun.matrix_outputs_json,
       editedAt: blockRun.completed_at,
@@ -135,11 +135,13 @@ export function DragDropBlockResponsePairs({
       const details = await apiClient.getRunDetails(
         String(sequenceRunResult.id)
       );
+
       setSequenceRunResult(details);
     } catch (e) {
       // handle error if needed
     }
   }
+
   if (!blocks || blocks.length === 0) {
     return (
       <div className="p-4 text-gray-500 bg-gray-50 border-dashed border-2 border-gray-200 text-center">
@@ -203,6 +205,7 @@ export function DragDropBlockResponsePairs({
                 ? {
                     ...blockResponse,
                     runId: sequenceRunResult?.id ?? blockResponse.runId ?? null,
+                    prompt_text: fallbackResponse.prompt_text ?? "", // <-- add this line!
                     blockRunId: blockResponse.blockRunId ?? null,
                     blockRuns: sequenceRunResult?.block_runs || [], // <-- add this
                   }

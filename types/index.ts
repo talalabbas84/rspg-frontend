@@ -147,6 +147,8 @@ export interface BlockResponse {
   outputs?: { [key: string]: string }
   matrix_output?: { [key: string]: { [key: string]: string } }
   editedAt?: string
+  prompt_text?: string; // <-- add this line!
+
 }
 
 

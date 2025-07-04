@@ -81,6 +81,7 @@ export function DragDropBlockResponsePair({
   const [showPreview, setShowPreview] = useState(false);
   const [showAddVariable, setShowAddVariable] = useState(false);
   const [showCreateVariable, setShowCreateVariable] = useState(false);
+  const [showCompiledPrompt, setShowCompiledPrompt] = useState(false);
 
   const [editGlobalVar, setEditGlobalVar] = useState<string | null>(null);
   const [editGlobalVarDefault, setEditGlobalVarDefault] = useState<string>("");
@@ -348,6 +349,7 @@ export function DragDropBlockResponsePair({
       });
     }
   };
+
 
   function getOutputVariables(block) {
     if (!block?.config_json) return [];
@@ -651,6 +653,34 @@ export function DragDropBlockResponsePair({
             onUpdate={handleEditResponse}
             editable={!response?.isLive}
           />
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-semibold text-base">Compiled Response</div>
+            {/* Toggle button here */}
+            {response?.prompt_text && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 mt-2"
+                onClick={() => setShowCompiledPrompt((v) => !v)}
+                title={
+                  showCompiledPrompt
+                    ? "Hide compiled prompt"
+                    : "Show compiled prompt"
+                }
+              >
+                {showCompiledPrompt ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </Button>
+            )}
+          </div>
+          {showCompiledPrompt && response?.prompt_text && (
+            <pre className="text-xs bg-gray-50 rounded p-3 mb-3 border text-gray-700 overflow-x-auto whitespace-pre-wrap">
+              {response.prompt_text}
+            </pre>
+          )}
         </Card>
       </div>
       {/* DnD Chip Overlay */}
